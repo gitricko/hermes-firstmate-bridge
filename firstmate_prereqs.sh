@@ -10,10 +10,16 @@
 #   6. treehouse worktree provider (REQUIRED by every session-provider backend)
 #   7. jq (required by herdr backend JSON parsing)
 #   8. config/crew-harness == pi (the pinned default)
-#   9. fm-fleet-snapshot.sh --json returns valid JSON
+#   9. tasks-axi (backlog/completion-gate backend, required for teardown)
+#   9b. pi harness (pinned crewmate: Pi-Agent)
+#   10. fm-fleet-snapshot.sh --json returns valid JSON
+#
+# Note: the claude CLI is informational only — a valid but NON-default firstmate
+# harness; its absence never fails a check.
 #
 # Exit code: 0 if all REQUIRED checks pass, 1 otherwise.
-# Usage: firstmate_prereqs.sh [--fix]   (--fix attempts to install treehouse)
+# Usage: firstmate_prereqs.sh [--fix]   (--fix installs treehouse + tasks-axi + pi
+#                                       and pins config/crew-harness = pi)
 
 set -u
 FM_HOME="${FM_HOME:-/config/Documents/_code/firstmate}"
@@ -25,6 +31,7 @@ FIX=0
 pass=0; fail=0
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); }
+fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; }
 warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
 info() { printf '  \033[36mINFO\033[0m %s\n' "$1"; }
 
@@ -58,11 +65,28 @@ else
   bad "python3 not found"
 fi
 
-echo "[4] claude CLI (pinned crewmate harness)"
-if command -v claude >/dev/null 2>&1; then
-  ok "claude $(claude --version 2>&1 | head -1)"
+echo "[4] pi CLI (pinned crewmate harness)"
+if command -v pi >/dev/null 2>&1; then
+  ok "pi $(pi --version 2>&1 | head -1)"
 else
-  bad "claude not on PATH — required (crew-harness pinned to claude)"
+  bad "pi not on PATH — pinned crewmate harness (config/crew-harness = pi)"
+  if [[ $FIX -eq 1 ]]; then
+    info "attempting npm install -g --ignore-scripts @earendil-works/pi-coding-agent"
+    if npm install -g --ignore-scripts @earendil-works/pi-coding-agent >/dev/null 2>&1; then
+      fixed "pi installed via npm"
+    else
+      bad "pi install failed (needs node/npm on PATH)"
+    fi
+  else
+    info "rerun with --fix to install pi (npm install -g --ignore-scripts @earendil-works/pi-coding-agent)"
+  fi
+fi
+
+# claude is a valid but NON-default firstmate harness — informational only (never a required check).
+if command -v claude >/dev/null 2>&1; then
+  info "claude $(claude --version 2>&1 | head -1) present (optional harness, not the pinned default)"
+else
+  info "claude not on PATH (optional harness — crew-harness pins pi, not claude)"
 fi
 
 echo "[5] backend session provider"
@@ -88,7 +112,7 @@ else
         # make sure it's on PATH for this shell
         export PATH="$DEST:$PATH"
         if command -v treehouse >/dev/null 2>&1; then
-          ok "treehouse installed to $DEST -> $(command -v treehouse)"
+          fixed "treehouse installed to $DEST -> $(command -v treehouse)"
         else
           warn "installed but not on PATH; add $DEST to PATH"
         fi
@@ -120,6 +144,14 @@ if [[ -f "$FM_HOME/config/crew-harness" ]]; then
   fi
 else
   bad "no config/crew-harness — firstmate would resolve 'unknown'; pin it to pi"
+  if [[ $FIX -eq 1 ]]; then
+    info "writing $FM_HOME/config/crew-harness = pi"
+    mkdir -p "$FM_HOME/config"
+    printf 'pi\n' > "$FM_HOME/config/crew-harness"
+    fixed "crew-harness pinned to pi"
+  else
+    info "rerun with --fix to pin crew-harness = pi"
+  fi
 fi
 
 echo "[9] tasks-axi (backlog/completion-gate backend, required for teardown)"
@@ -137,7 +169,7 @@ sys.exit(0 if parse(v)>=parse('0.2.4') else 1)" 2>/dev/null; then
     if [[ $FIX -eq 1 ]]; then
       info "attempting npm install -g tasks-axi"
       if npm install -g tasks-axi >/dev/null 2>&1; then
-        ok "tasks-axi upgraded via npm"
+        fixed "tasks-axi upgraded via npm"
       else
         bad "npm install -g tasks-axi failed (needs node/npm on PATH)"
       fi
@@ -150,7 +182,7 @@ else
   if [[ $FIX -eq 1 ]]; then
     info "attempting npm install -g tasks-axi"
     if npm install -g tasks-axi >/dev/null 2>&1; then
-      ok "tasks-axi installed via npm"
+      fixed "tasks-axi installed via npm"
     else
       bad "npm install -g tasks-axi failed (needs node/npm on PATH)"
     fi
@@ -167,7 +199,7 @@ else
   if [[ $FIX -eq 1 ]]; then
     info "attempting npm install -g --ignore-scripts @earendil-works/pi-coding-agent"
     if npm install -g --ignore-scripts @earendil-works/pi-coding-agent >/dev/null 2>&1; then
-      ok "pi installed via npm"
+      fixed "pi installed via npm"
     else
       bad "pi install failed (needs node/npm on PATH)"
     fi
