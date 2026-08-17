@@ -49,6 +49,13 @@ firstmate is pinned by commit SHA in `.firstmate-ref`. Bumps are deliberate: upd
 - **Every PR:** SKILL.md lint (frontmatter, ≤60-char description, no `trigger:` field) + module parse + prereqs in a clean container
 - **main/releases:** full scout smoke dispatch (spawn a pi crewmate, get a report, teardown) proving the whole lifecycle against the pinned version
 
+To run a no-mistakes gate review locally:
+
+```bash
+no-mistakes runs
+git push no-mistakes <branch>
+```
+
 ## Design
 
 - Crewmate harness: **pi** (Pi-Agent) — pinned in `config/crew-harness`
