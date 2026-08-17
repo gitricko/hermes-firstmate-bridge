@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: SKILL.md + module lint (test 6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Frontmatter + description check
+        run: |
+          set -e
+          DESC=$(awk '/^description:/{sub(/^description: */,""); print}' SKILL.md)
+          echo "description: $DESC"
+          [ ${#DESC} -le 60 ] || { echo "FAIL: description > 60 chars"; exit 1; }
+          grep -q "^trigger:" SKILL.md && { echo "FAIL: trigger: field must not exist"; exit 1; } || echo "ok: no trigger field"
+          python3 -c "import yaml,sys; yaml.safe_load(open('SKILL.md')); print('ok: frontmatter parses')"
+      - name: Module parses
+        run: "python3 -c \"import ast; ast.parse(open('firstmate_bridge.py').read()); print('ok module parses')\""
+
+  prereqs:
+    name: Prereqs in clean env (test 1)
+    runs-on: ubuntu-latest
+    container: node:20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install git + jq
+        run: |
+          apt-get update -qq && apt-get install -y -qq git jq >/dev/null
+      - name: Install firstmate (pinned)
+        run: |
+          FM_HOME="$HOME/Documents/firstmate"
+          git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
+          git -C "$FM_HOME" checkout --detach "$(cat .firstmate-ref)"
+      - name: Run prereqs --fix
+        run: |
+          FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh --fix
+      - name: Assert all prereqs met
+        run: |
+          FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh | grep -q "ALL REQUIRED PREREQUISITES MET" && echo "PASS" || { echo "FAIL"; exit 1; }
+
+  smoke:
+    name: Scout smoke dispatch (test 4, full lifecycle)
+    runs-on: ubuntu-latest
+    container: node:20
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          apt-get update -qq && apt-get install -y -qq git jq tmux >/dev/null
+          npm install -g --ignore-scripts @earendil-works/pi-coding-agent tasks-axi >/dev/null
+      - name: Install firstmate (pinned) + prereqs
+        run: |
+          FM_HOME="$HOME/Documents/firstmate"
+          git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
+          git -C "$FM_HOME" checkout --detach "$(cat .firstmate-ref)"
+          FM_HOME="$FM_HOME" bash firstmate_prereqs.sh --fix
+      - name: Scout smoke dispatch
+        env:
+          FM_HOME: "$HOME/Documents/firstmate"
+        run: |
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, '.')
+          import firstmate_bridge as fb
+          res = fb.dispatch("Trivial smoke: write one line to data/ci-smoke/repo-line.txt saying CI_OK and stop.", "/config/Documents/_code/firstmate", kind="scout", harness="pi", timeout=300)
+          assert res.get("ok"), res
+          print("spawned:", res.get("task_id"))
+          PY
