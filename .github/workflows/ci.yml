@@ -81,7 +81,11 @@ jobs:
           import sys
           sys.path.insert(0, '.')
           import firstmate_bridge as fb
-          res = fb.dispatch("Trivial smoke: write one line to data/ci-smoke/repo-line.txt saying CI_OK and stop.", "/config/Documents/_code/firstmate", kind="scout", harness="pi", timeout=300)
+          # The step runs in the checkout dir ($GITHUB_WORKSPACE), which is a real
+          # git repo on the runner. Use it as the dispatch project instead of the
+          # old machine-local POC path (which does not exist in CI).
+          project = os.environ.get("GITHUB_WORKSPACE") or os.getcwd()
+          res = fb.dispatch("Trivial smoke: write one line to data/ci-smoke/repo-line.txt saying CI_OK and stop.", project, kind="scout", harness="pi", timeout=300)
           assert res.get("ok"), res
           print("spawned:", res.get("task_id"))
           PY
