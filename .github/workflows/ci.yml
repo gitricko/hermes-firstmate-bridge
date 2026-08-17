@@ -78,6 +78,7 @@ jobs:
           # Actions passes env: values verbatim, so '$HOME' would stay literal)
           export FM_HOME="$HOME/Documents/firstmate"
           python3 - <<'PY'
+          import os
           import sys
           sys.path.insert(0, '.')
           import firstmate_bridge as fb
