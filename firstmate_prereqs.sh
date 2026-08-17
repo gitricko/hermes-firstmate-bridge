@@ -13,7 +13,8 @@
 #   9. fm-fleet-snapshot.sh --json returns valid JSON
 #
 # Exit code: 0 if all REQUIRED checks pass, 1 otherwise.
-# Usage: firstmate_prereqs.sh [--fix]   (--fix attempts to install treehouse)
+# Usage: firstmate_prereqs.sh [--fix]   (--fix installs treehouse + tasks-axi + pi
+#                                       and pins config/crew-harness = pi)
 
 set -u
 FM_HOME="${FM_HOME:-/config/Documents/_code/firstmate}"
@@ -58,11 +59,21 @@ else
   bad "python3 not found"
 fi
 
-echo "[4] claude CLI (pinned crewmate harness)"
-if command -v claude >/dev/null 2>&1; then
-  ok "claude $(claude --version 2>&1 | head -1)"
+echo "[4] pi CLI (pinned crewmate harness)"
+if command -v pi >/dev/null 2>&1; then
+  ok "pi $(pi --version 2>&1 | head -1)"
 else
-  bad "claude not on PATH — required (crew-harness pinned to claude)"
+  bad "pi not on PATH — pinned crewmate harness (config/crew-harness = pi)"
+  if [[ $FIX -eq 1 ]]; then
+    info "attempting npm install -g --ignore-scripts @earendil-works/pi-coding-agent"
+    if npm install -g --ignore-scripts @earendil-works/pi-coding-agent >/dev/null 2>&1; then
+      ok "pi installed via npm"
+    else
+      bad "pi install failed (needs node/npm on PATH)"
+    fi
+  else
+    info "rerun with --fix to install pi (npm install -g --ignore-scripts @earendil-works/pi-coding-agent)"
+  fi
 fi
 
 echo "[5] backend session provider"
@@ -120,6 +131,14 @@ if [[ -f "$FM_HOME/config/crew-harness" ]]; then
   fi
 else
   bad "no config/crew-harness — firstmate would resolve 'unknown'; pin it to pi"
+  if [[ $FIX -eq 1 ]]; then
+    info "writing $FM_HOME/config/crew-harness = pi"
+    mkdir -p "$FM_HOME/config"
+    printf 'pi\n' > "$FM_HOME/config/crew-harness"
+    ok "crew-harness pinned to pi"
+  else
+    info "rerun with --fix to pin crew-harness = pi"
+  fi
 fi
 
 echo "[9] tasks-axi (backlog/completion-gate backend, required for teardown)"

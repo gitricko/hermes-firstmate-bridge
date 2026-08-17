@@ -19,7 +19,14 @@ jobs:
           echo "description: $DESC"
           [ ${#DESC} -le 60 ] || { echo "FAIL: description > 60 chars"; exit 1; }
           grep -q "^trigger:" SKILL.md && { echo "FAIL: trigger: field must not exist"; exit 1; } || echo "ok: no trigger field"
-          python3 -c "import yaml,sys; yaml.safe_load(open('SKILL.md')); print('ok: frontmatter parses')"
+          python3 - <<'PY'
+          import yaml
+          text = open('SKILL.md').read()
+          parts = text.split('---', 2)
+          assert len(parts) == 3 and parts[0].strip() == '', 'SKILL.md must start with YAML frontmatter (---)'
+          yaml.safe_load(parts[1])
+          print('ok: frontmatter parses')
+          PY
       - name: Module parses
         run: "python3 -c \"import ast; ast.parse(open('firstmate_bridge.py').read()); print('ok module parses')\""
 
@@ -29,9 +36,9 @@ jobs:
     container: node:20
     steps:
       - uses: actions/checkout@v4
-      - name: Install git + jq
+      - name: Install git + jq + tmux
         run: |
-          apt-get update -qq && apt-get install -y -qq git jq >/dev/null
+          apt-get update -qq && apt-get install -y -qq git jq tmux >/dev/null
       - name: Install firstmate (pinned)
         run: |
           FM_HOME="$HOME/Documents/firstmate"
@@ -40,6 +47,8 @@ jobs:
       - name: Run prereqs --fix
         run: |
           FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh --fix
+          # treehouse --fix installs to /config/.local/bin; persist it for later steps
+          echo "PATH=/config/.local/bin:$PATH" >> "$GITHUB_ENV"
       - name: Assert all prereqs met
         run: |
           FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh | grep -q "ALL REQUIRED PREREQUISITES MET" && echo "PASS" || { echo "FAIL"; exit 1; }
@@ -61,6 +70,8 @@ jobs:
           git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
           git -C "$FM_HOME" checkout --detach "$(cat .firstmate-ref)"
           FM_HOME="$FM_HOME" bash firstmate_prereqs.sh --fix
+          # treehouse --fix installs to /config/.local/bin; persist it for the dispatch step
+          echo "PATH=/config/.local/bin:$PATH" >> "$GITHUB_ENV"
       - name: Scout smoke dispatch
         env:
           FM_HOME: "$HOME/Documents/firstmate"
