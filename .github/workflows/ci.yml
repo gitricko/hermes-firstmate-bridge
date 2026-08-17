@@ -73,6 +73,8 @@ jobs:
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       # The webtop image is several GB; free disk like the webtop repo does.
       - name: Free disk space
         uses: jlumbroso/free-disk-space@main
