@@ -1,7 +1,7 @@
 ---
 name: firstmate-bridge
 description: Dispatch code-work to firstmate crews; Hermes stays captain.
-version: 2.0.0
+version: 2.1.0
 author: Gram Ricko (gitricko), Hermes Agent
 license: MIT
 platforms: [linux, macos]
@@ -71,6 +71,15 @@ glue files — crewmates never touch files outside their project worktree, and
 | `merge(id, pr_url)` | `fm-pr-merge.sh` | GATED: captain word only |
 | `teardown(id)` | `fm-teardown.sh` | needs `tasks-axi` installed |
 
+## no-mistakes gate (mode)
+
+Ship tasks carry a **delivery mode** (`fm-brief.sh --mode <no-mistakes|direct-PR|local-only>`).
+The module's `dispatch()` defaults to `mode="no-mistakes"` — do NOT override to
+`direct-PR` unless the captain explicitly asks (a `direct-PR` short-circuits the
+gate). `no-mistakes` runs the full pipeline: implement → /no-mistakes review →
+push → PR → merge authority. See `references/no-mistakes-gate.md` for the full
+workflow, install, config, and pitfalls (this is correct as of v1.48.0).
+
 ## Procedure
 
 1. **Classify**: is this code-work in a registrable project? If it's
@@ -84,9 +93,13 @@ glue files — crewmates never touch files outside their project worktree, and
 5. **Dispatch** in the background
    (`dispatch(request, project, kind, harness="pi", timeout=600)`) so the
    session keeps working; do not block on the crewmate.
-6. **Arm a watcher** that alerts when the report/PR lands
-   (`background=true` + `notify_on_complete=true`); never poll in a blocking
-   loop.
+6. **Arm a watcher** with the bundled `fm-watch.sh` (background +
+   `notify_on_complete=true`); never poll in a blocking loop. Unlike a bare
+   terminal-state loop, `fm-watch.sh` treats **every state transition as
+   news** and exits `3` on `parked`/`pending_decision` so the captain can feed
+   the no-mistakes gate instead of waiting on a silent timeout. Exit codes:
+   `0` terminal (done/failed/blocked + PR URL), `3` parked (feed the gate),
+   `2` timeout (re-arm to continue), `1` error.
 7. **Relay** task_id, backend, and the PR URL or report path. Failure is news —
    report it honestly.
 8. **Teardown** completed tasks with `teardown(id)`; lifecycle closes cleanly
@@ -109,6 +122,12 @@ glue files — crewmates never touch files outside their project worktree, and
   autonomously; use a watcher, not the dispatch return value.
 - **`{TASK}` appears twice** in a scaffolded brief; the module replaces all
   occurrences.
+- **Parked ≠ stalled**: a no-mistakes crewmate that reaches the review gate
+  sits at `state=parked` with `pending_decision=true`, NOT a terminal state.
+  A terminal-only watcher will silently time out on it (observed bug). Always
+  watch with `fm-watch.sh` and, on exit `3`, feed the gate
+  (`no-mistakes axi respond --action …` in the worktree) or steer via
+  `fm-send.sh`; never re-arm a parked crewmate without resolving the gate.
 
 ## Verification
 
