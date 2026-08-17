@@ -53,40 +53,138 @@ jobs:
         run: |
           FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh | grep -q "ALL REQUIRED PREREQUISITES MET" && echo "PASS" || { echo "FAIL"; exit 1; }
 
+  # Scout smoke dispatch (test 4, full lifecycle) — runs INSIDE the published
+  # hermes-webtop image (DevProd-parity), not a bare node:20 container.
+  #
+  # Why: the old bare-node container had no herdr (firstmate's primary session
+  # backend), so fm-spawn.sh fell back to the default tmux backend and
+  # `treehouse get` timed out after 60s. The webtop image ships the real stack
+  # the captain runs: Hermes + OmniRoute (:20128) + Mnemon + pi + herdr
+  # (v0.7.4, protocol 16) + tmux + treehouse (installed below from firstmate's
+  # pinned installer via firstmate_prereqs.sh --fix).
+  #
+  # Shape (mirrors hermes-webtop's own docker-publish.yml): boot the container
+  # with its real /init entrypoint so all services come up, wait for the
+  # readiness signals (Hermes gateway :9119, OmniRoute :20128), then docker exec
+  # every step INSIDE the container.
   smoke:
     name: Scout smoke dispatch (test 4, full lifecycle)
     runs-on: ubuntu-latest
-    container: node:20
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
-      - name: Install deps
+      # The webtop image is several GB; free disk like the webtop repo does.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+      - name: Boot hermes-webtop (DevProd-parity)
         run: |
-          apt-get update -qq && apt-get install -y -qq git jq tmux >/dev/null
-          npm install -g --ignore-scripts @earendil-works/pi-coding-agent tasks-axi >/dev/null
-      - name: Install firstmate (pinned) + prereqs
+          set -euxo pipefail
+          IMAGE="ghcr.io/gitricko/hermes-webtop:latest"
+          CID="hermes-webtop-ci"
+          docker rm -f "$CID" >/dev/null 2>&1 || true
+          docker pull "$IMAGE"
+          # Boot the published image with its real init/entrypoint (/init), the
+          # same boot the captain's runtime uses: LSIO /custom-cont-init.d starts
+          # Hermes, OmniRoute, Mnemon, pi config seed, etc. PUID/PGID 1001 match
+          # the hosted-runner uid/gid so the mounted checkout stays writable for
+          # the container's abc user. --shm-size is the compose-provided value.
+          docker run -d --name "$CID" \
+            --shm-size=1g \
+            -e PUID=1001 -e PGID=1001 \
+            -e TZ=UTC \
+            -v "$GITHUB_WORKSPACE":/workspace \
+            "$IMAGE"
+          # Wait for boot-time init to finish. Mirrors docker-publish.yml: the
+          # readiness signal is Hermes gateway :9119 (start-hermes.sh done); we
+          # additionally require OmniRoute :20128 because pi's seeded default
+          # model is omniroute/auto-fastest (start-pi.sh writes ~/.pi/agent).
+          echo "Waiting for hermes-webtop services (Hermes :9119, OmniRoute :20128)..."
+          for i in $(seq 1 120); do
+            HERMES=$({ docker exec "$CID" curl -s -o /dev/null -w '%{http_code}' http://localhost:9119 2>/dev/null || true; })
+            OMNI=$({ docker exec "$CID" curl -s -o /dev/null -w '%{http_code}' http://localhost:20128/v1/models 2>/dev/null || true; })
+            echo "  [$i] hermes=$HERMES omniroute=$OMNI"
+            if printf '%s' "$HERMES" | grep -qE '200|302|401' && printf '%s' "$OMNI" | grep -qE '200|301|302|401|403'; then
+              echo "hermes-webtop is ready."
+              break
+            fi
+            if [ "$i" -eq 120 ]; then
+              echo "FAIL: hermes-webtop did not become ready within 10 minutes." >&2
+              docker exec "$CID" sh -c 'ls -1 /tmp/*.log 2>/dev/null | head' || true
+              docker logs "$CID" 2>&1 | tail -80 || true
+              exit 1
+            fi
+            sleep 5
+          done
+      - name: Install firstmate (pinned) + prereqs --fix (inside container)
         run: |
-          FM_HOME="$HOME/Documents/firstmate"
-          git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
-          git -C "$FM_HOME" checkout --detach "$(cat .firstmate-ref)"
-          FM_HOME="$FM_HOME" bash firstmate_prereqs.sh --fix
-          # treehouse --fix installs to /config/.local/bin; persist it for the dispatch step
-          echo "PATH=/config/.local/bin:$PATH" >> "$GITHUB_ENV"
-      - name: Scout smoke dispatch
+          set -euxo pipefail
+          CID="hermes-webtop-ci"
+          # Everything below runs inside the container as the image's abc user
+          # (the captain's runtime user; abc's HOME is /config). herdr + pi are
+          # already on PATH in the image; firstmate_prereqs.sh --fix installs
+          # treehouse to /config/.local/bin (firstmate's pinned installer) and
+          # pins config/crew-harness = pi.
+          docker exec -u abc -w /workspace "$CID" bash -c '
+            set -euxo pipefail
+            export HOME=/config
+            export FM_HOME="$HOME/Documents/firstmate"
+            export PATH=/config/.local/bin:$PATH
+            export BRIDGE_SCRIPT=/workspace/firstmate_bridge.py
+            git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
+            git -C "$FM_HOME" checkout --detach "$(cat /workspace/.firstmate-ref)"
+            bash /workspace/firstmate_prereqs.sh --fix
+            # Verification evidence: image-shipped herdr + pi and just-installed
+            # treehouse on PATH, same prereq gate the prereqs job uses.
+            echo "--- in-container toolchain ---"
+            for tool in herdr pi jq; do
+              printf "%-10s " "$tool"
+              command -v "$tool" >/dev/null 2>&1 && "$tool" --version 2>&1 | head -1 || echo MISSING
+            done
+            printf "%-10s " tmux; tmux -V 2>&1 | head -1 || echo MISSING
+            printf "%-10s " treehouse; command -v treehouse >/dev/null 2>&1 && treehouse --version 2>&1 | head -1 || echo MISSING
+            bash /workspace/firstmate_prereqs.sh | grep -q "ALL REQUIRED PREREQUISITES MET" \
+              && echo "PREREQS PASS" || { echo "PREREQS FAIL"; exit 1; }
+          '
+      - name: Scout smoke dispatch (inside container)
+        # NOTE on indentation: the docker exec bash -c '...' payload lines sit at
+        # the SAME indent as the other run lines on purpose. YAML strips the
+        # common 10-space indent, so inside the inner bash the heredoc body and
+        # its PY terminator land at column 0 — if they were indented deeper the
+        # terminator would not match and bash would read the heredoc to EOF.
         run: |
-          # $HOME must be expanded by the shell, not inside an env: block (GitHub
-          # Actions passes env: values verbatim, so '$HOME' would stay literal)
+          set -euxo pipefail
+          CID="hermes-webtop-ci"
+          docker exec -u abc -w /workspace "$CID" bash -c '
+          set -euxo pipefail
+          export HOME=/config
           export FM_HOME="$HOME/Documents/firstmate"
-          python3 - <<'PY'
-          import os
+          export PATH=/config/.local/bin:$PATH
+          # herdr is the primary backend firstmate auto-selects and is baked
+          # into the image (headless-capable: the client starts the server on
+          # demand). Pin it explicitly so fm-spawn never falls back to the
+          # default tmux backend that timed out on treehouse worktrees in the
+          # bare node:20 container.
+          export FM_BACKEND=herdr
+          python3 - <<PY
           import sys
-          sys.path.insert(0, '.')
+          sys.path.insert(0, "/workspace")
           import firstmate_bridge as fb
-          # The step runs in the checkout dir ($GITHUB_WORKSPACE), which is a real
-          # git repo on the runner. Use it as the dispatch project instead of the
-          # old machine-local POC path (which does not exist in CI).
-          project = os.environ.get("GITHUB_WORKSPACE") or os.getcwd()
-          res = fb.dispatch("Trivial smoke: write one line to data/ci-smoke/repo-line.txt saying CI_OK and stop.", project, kind="scout", harness="pi", timeout=300)
+          # The checkout is mounted at /workspace and is a real git repo; use it
+          # as the dispatch project (same role GITHUB_WORKSPACE played in the
+          # old bare-container job).
+          project = "/workspace"
+          res = fb.dispatch("Trivial smoke: write one line to data/ci-smoke/repo-line.txt saying CI_OK and stop.", project, kind="scout", harness="pi", backend="herdr", timeout=300)
           assert res.get("ok"), res
           print("spawned:", res.get("task_id"))
           PY
+          '
+      - name: Teardown container
+        if: always()
+        run: docker rm -f hermes-webtop-ci >/dev/null 2>&1 || true
