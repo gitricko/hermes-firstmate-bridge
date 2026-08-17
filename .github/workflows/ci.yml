@@ -73,9 +73,10 @@ jobs:
           # treehouse --fix installs to /config/.local/bin; persist it for the dispatch step
           echo "PATH=/config/.local/bin:$PATH" >> "$GITHUB_ENV"
       - name: Scout smoke dispatch
-        env:
-          FM_HOME: "$HOME/Documents/firstmate"
         run: |
+          # $HOME must be expanded by the shell, not inside an env: block (GitHub
+          # Actions passes env: values verbatim, so '$HOME' would stay literal)
+          export FM_HOME="$HOME/Documents/firstmate"
           python3 - <<'PY'
           import sys
           sys.path.insert(0, '.')
