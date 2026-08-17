@@ -49,11 +49,12 @@ firstmate is pinned by commit SHA in `.firstmate-ref`. Bumps are deliberate: upd
 - **Every PR:** SKILL.md lint (frontmatter, ≤60-char description, no `trigger:` field) + module parse + prereqs in a clean container
 - **main/releases:** full scout smoke dispatch (spawn a pi crewmate, get a report, teardown) proving the whole lifecycle against the pinned version
 
-To run a no-mistakes gate review locally:
+To run a no-mistakes gate review locally, first initialize the gate (this creates the `no-mistakes` remote):
 
 ```bash
-no-mistakes runs
-git push no-mistakes <branch>
+no-mistakes init
+no-mistakes runs   # list/status of existing pipeline runs (does not trigger a review)
+git push no-mistakes <branch>   # this is what actually triggers the gate review
 ```
 
 ## Design
