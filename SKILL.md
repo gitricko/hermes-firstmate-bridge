@@ -128,6 +128,13 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
   watch with `fm-watch.sh` and, on exit `3`, feed the gate
   (`no-mistakes axi respond --action …` in the worktree) or steer via
   `fm-send.sh`; never re-arm a parked crewmate without resolving the gate.
+- **pi-agent LLM config missing**: if pi-agent uses unknown models, errors
+  with "no providers configured", or fails to start, check that
+  `~/.pi/agent/models.json` and `~/.pi/agent/settings.json` exist. See
+  `references/pi-models.example.json` and `references/pi-settings.example.json`
+  in this repo for templates. `firstmate_prereqs.sh` [10] will WARN (not FAIL)
+  when these files are absent — copy the templates in yourself; the bridge
+  intentionally does NOT auto-install provider configs.
 
 ## Verification
 

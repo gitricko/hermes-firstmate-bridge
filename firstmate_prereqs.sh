@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # firstmate_prereqs.sh — verify everything firstmate-bridge needs to dispatch a crew.
 #
-# Checks (each PASS/FAIL):
+# Checks (each PASS/FAIL/WARN):
 #   1. firstmate code root + bin/ present
 #   2. FM_HOME resolves (explicit, fail-closed)
 #   3. python3 + firstmate_bridge module importable
@@ -12,7 +12,8 @@
 #   8. config/crew-harness == pi (the pinned default)
 #   9. tasks-axi (backlog/completion-gate backend, required for teardown)
 #   9b. pi harness (pinned crewmate: Pi-Agent)
-#   10. fm-fleet-snapshot.sh --json returns valid JSON
+#   10. pi-agent LLM config (WARN only — see references/pi-models.example.json + pi-settings.example.json)
+#   11. fm-fleet-snapshot.sh --json returns valid JSON
 #
 # Note: the claude CLI is informational only — a valid but NON-default firstmate
 # harness; its absence never fails a check.
@@ -223,7 +224,51 @@ else
   fi
 fi
 
-echo "[10] fm-fleet-snapshot.sh --json"
+echo "[10] pi-agent LLM config (WARN — agent awareness only, not auto-installed)"
+PI_AGENT_DIR="$HOME/.pi/agent"
+PI_MODELS="$PI_AGENT_DIR/models.json"
+PI_SETTINGS="$PI_AGENT_DIR/settings.json"
+MISSING=()
+[[ -f "$PI_MODELS" ]]  || MISSING+=("$PI_MODELS")
+[[ -f "$PI_SETTINGS" ]] || MISSING+=("$PI_SETTINGS")
+if [[ ${#MISSING[@]} -eq 0 ]]; then
+  ok "models.json + settings.json present"
+else
+  printf '  \033[33mWARN\033[0m %s\n' "pi-agent LLM config missing"
+  if [[ ${#MISSING[@]} -eq 1 ]]; then
+    MSG="Missing: ${MISSING[0]}"
+  else
+    MSG="Missing: ${MISSING[0]} (${MISSING[1]})"
+  fi
+  printf '       %s\n' "$MSG"
+  printf '       This will cause pi-agent to use default models that may not match your environment.\n'
+  printf '       To configure, write the following files:\n'
+  printf '\n'
+  # Locate references/ relative to this script (works for any install layout)
+  _prereqs_self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+  _refs_dir="$(cd "$(dirname "$_prereqs_self")" && pwd)/references"
+  printf '       # %s\n' "$PI_MODELS"
+  printf '       cat > %s <<'"'"'EOF'"'"'\n' "$PI_MODELS"
+  if [[ -f "$_refs_dir/pi-models.example.json" ]]; then
+    sed 's/^/       /' "$_refs_dir/pi-models.example.json"
+  else
+    printf '       # (see references/pi-models.example.json in the firstmate-bridge repo)\n'
+  fi
+  printf '       EOF\n'
+  printf '\n'
+  printf '       # %s\n' "$PI_SETTINGS"
+  printf '       cat > %s <<'"'"'EOF'"'"'\n' "$PI_SETTINGS"
+  if [[ -f "$_refs_dir/pi-settings.example.json" ]]; then
+    sed 's/^/       /' "$_refs_dir/pi-settings.example.json"
+  else
+    printf '       # (see references/pi-settings.example.json in the firstmate-bridge repo)\n'
+  fi
+  printf '       EOF\n'
+  printf '\n'
+  info "see references/pi-models.example.json + references/pi-settings.example.json in this repo"
+fi
+
+echo "[11] fm-fleet-snapshot.sh --json"
 if FM_HOME="$FM_HOME" python3 -c "
 import importlib.util,sys,json
 sys.path.insert(0,'$(dirname "$BRIDGE_SCRIPT")')
