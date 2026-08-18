@@ -8,7 +8,7 @@
 #   4. pi (Pi-Agent) harness present (pinned crewmate harness)
 #   5. backend session provider: herdr detected (primary) — tmux optional
 #   6. treehouse worktree provider (REQUIRED by every session-provider backend)
-#   7. jq (required by herdr backend JSON parsing)
+#   7. jq (required by herdr backend JSON parsing) — --fix installable via apt/brew
 #   8. config/crew-harness == pi (the pinned default)
 #   9. tasks-axi (backlog/completion-gate backend, required for teardown)
 #   9b. pi harness (pinned crewmate: Pi-Agent)
@@ -132,6 +132,21 @@ if command -v jq >/dev/null 2>&1; then
   ok "jq present"
 else
   bad "jq missing — herdr backend requires it to parse JSON output"
+  if [[ $FIX -eq 1 ]]; then
+    info "attempting apt-get install -y jq"
+    if apt-get install -y jq >/dev/null 2>&1; then
+      fixed "jq installed via apt"
+    else
+      info "apt failed (may need sudo/root); attempting brew install jq"
+      if command -v brew >/dev/null 2>&1 && brew install jq >/dev/null 2>&1; then
+        fixed "jq installed via brew"
+      else
+        bad "jq install failed (needs apt or brew available)"
+      fi
+    fi
+  else
+    info "rerun with --fix to install jq (apt-get install -y jq)"
+  fi
 fi
 
 echo "[8] config/crew-harness == pi (pinned crewmate harness)"
