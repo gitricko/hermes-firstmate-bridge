@@ -85,32 +85,27 @@ jobs:
           haskell: true
           large-packages: true
           swap-storage: true
-      - name: Boot hermes-webtop (DevProd-parity)
+      - name: Boot hermes-webtop via make start (DevProd-parity)
         run: |
           set -euxo pipefail
           IMAGE="ghcr.io/gitricko/hermes-webtop:latest"
-          CID="hermes-webtop-ci"
-          docker rm -f "$CID" >/dev/null 2>&1 || true
+          docker rm -f hermes-webtop >/dev/null 2>&1 || true
           docker pull "$IMAGE"
-          # Boot the published image with its real init/entrypoint (/init), the
-          # same boot the captain's runtime uses: LSIO /custom-cont-init.d starts
-          # Hermes, OmniRoute, Mnemon, pi config seed, etc. PUID/PGID 1001 match
-          # the hosted-runner uid/gid so the mounted checkout stays writable for
-          # the container's abc user. --shm-size is the compose-provided value.
-          docker run -d --name "$CID" \
-            --shm-size=1g \
-            -e PUID=1001 -e PGID=1001 \
-            -e TZ=UTC \
-            -v "$GITHUB_WORKSPACE":/workspace \
-            "$IMAGE"
-          # Wait for boot-time init to finish. Mirrors docker-publish.yml: the
-          # readiness signal is Hermes gateway :9119 (start-hermes.sh done); we
-          # additionally require OmniRoute :20128 because pi's seeded default
-          # model is omniroute/auto-fastest (start-pi.sh writes ~/.pi/agent).
+          # Clone the webtop repo to a temp dir and boot via its Makefile —
+          # `make start` runs `docker compose up -d`, the captain's real boot
+          # path (mirrors hermes-webtop's own docker-publish.yml test step).
+          git clone --quiet --depth 1 https://github.com/gitricko/hermes-webtop.git /tmp/hermes-webtop
+          cd /tmp/hermes-webtop
+          NO_LOGS=1 DOCKER_URI="$IMAGE" make start
+          # The rest of this job expects the checkout at /workspace inside the
+          # container. The compose file mounts the config volume (not the
+          # checkout), so copy the checkout in after boot.
+          docker cp "$GITHUB_WORKSPACE"/. hermes-webtop:/workspace
+          # Readiness checks unchanged: Hermes gateway :9119 + OmniRoute :20128.
           echo "Waiting for hermes-webtop services (Hermes :9119, OmniRoute :20128)..."
           for i in $(seq 1 120); do
-            HERMES=$({ docker exec "$CID" curl -s -o /dev/null -w '%{http_code}' http://localhost:9119 2>/dev/null || true; })
-            OMNI=$({ docker exec "$CID" curl -s -o /dev/null -w '%{http_code}' http://localhost:20128/v1/models 2>/dev/null || true; })
+            HERMES=$({ docker exec hermes-webtop curl -s -o /dev/null -w '%{http_code}' http://localhost:9119 2>/dev/null || true; })
+            OMNI=$({ docker exec hermes-webtop curl -s -o /dev/null -w '%{http_code}' http://localhost:20128/v1/models 2>/dev/null || true; })
             echo "  [$i] hermes=$HERMES omniroute=$OMNI"
             if printf '%s' "$HERMES" | grep -qE '200|302|401' && printf '%s' "$OMNI" | grep -qE '200|301|302|401|403'; then
               echo "hermes-webtop is ready."
@@ -118,8 +113,8 @@ jobs:
             fi
             if [ "$i" -eq 120 ]; then
               echo "FAIL: hermes-webtop did not become ready within 10 minutes." >&2
-              docker exec "$CID" sh -c 'ls -1 /tmp/*.log 2>/dev/null | head' || true
-              docker logs "$CID" 2>&1 | tail -80 || true
+              docker exec hermes-webtop sh -c 'ls -1 /tmp/*.log 2>/dev/null | head' || true
+              docker logs hermes-webtop 2>&1 | tail -80 || true
               exit 1
             fi
             sleep 5
@@ -127,7 +122,7 @@ jobs:
       - name: Install firstmate (pinned) + prereqs --fix (inside container)
         run: |
           set -euxo pipefail
-          CID="hermes-webtop-ci"
+          CID="hermes-webtop"
           # Everything below runs inside the container as the image's abc user
           # (the captain's runtime user; abc's HOME is /config). herdr + pi are
           # already on PATH in the image; firstmate_prereqs.sh --fix installs
@@ -162,7 +157,7 @@ jobs:
         # terminator would not match and bash would read the heredoc to EOF.
         run: |
           set -euxo pipefail
-          CID="hermes-webtop-ci"
+          CID="hermes-webtop"
           docker exec -u abc -w /workspace "$CID" bash -c '
           set -euxo pipefail
           export HOME=/config
@@ -194,4 +189,4 @@ jobs:
           '
       - name: Teardown container
         if: always()
-        run: docker rm -f hermes-webtop-ci >/dev/null 2>&1 || true
+        run: docker rm -f hermes-webtop >/dev/null 2>&1 || true
