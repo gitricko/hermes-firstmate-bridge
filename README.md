@@ -1,4 +1,4 @@
-# firstmate-bridge
+# hermes-firstmate-bridge
 
 Portable Hermes skill that turns any Hermes install into a **firstmate captain** with a **pi-agent crew**.
 
