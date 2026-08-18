@@ -131,7 +131,7 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
 - **pi-agent LLM config missing**: if pi-agent uses unknown models, errors
   with "no providers configured", or fails to start, check that
   `~/.pi/agent/models.json` and `~/.pi/agent/settings.json` exist. See
-  `references/pi-models.example.json` and `references/pi-settings.example.json`
+  `references/models.json` and `references/settings.json`
   in this repo for templates. `firstmate_prereqs.sh` [10] will WARN (not FAIL)
   when these files are absent — copy the templates in yourself; the bridge
   intentionally does NOT auto-install provider configs.

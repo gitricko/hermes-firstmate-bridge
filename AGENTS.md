@@ -3,7 +3,7 @@
 This file is the project's committed home for project-intrinsic agent knowledge: build, test, release, architecture, and sharp-edge notes that should travel with the code.
 
 - Add durable project-specific notes here as they are discovered through real work.
-- pi-agent LLM config (`~/.pi/agent/models.json` + `settings.json`) is **warn-only**, never auto-installed by `install.sh`. Templates live at `references/pi-models.example.json` and `references/pi-settings.example.json` (fetched from hermes-webtop `main`). `firstmate_prereqs.sh` [10] WARNs when these files are absent; see SKILL.md "Pitfalls > pi-agent LLM config missing".
+- pi-agent LLM config (`~/.pi/agent/models.json` + `settings.json`) is **warn-only**, never auto-installed by `install.sh`. Templates live at `references/models.json` and `references/settings.json` (fetched from hermes-webtop `main`). `firstmate_prereqs.sh` [10] WARNs when these files are absent; see SKILL.md "Pitfalls > pi-agent LLM config missing".
 
 ## Maintaining this file
 

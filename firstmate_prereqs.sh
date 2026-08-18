@@ -245,27 +245,38 @@ else
   printf '       To configure, write the following files:\n'
   printf '\n'
   # Locate references/ relative to this script (works for any install layout)
-  _prereqs_self="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+  # Portable realpath: use realpath if available, else resolve manually
+  if command -v realpath >/dev/null 2>&1; then
+    _prereqs_self="$(realpath "${BASH_SOURCE[0]}")" 2>/dev/null
+  else
+    # Fallback: resolve $0 without symlinks (works on macOS/Linux without readlink -f)
+    case "${BASH_SOURCE[0]}" in
+      /*) _prereqs_self="${BASH_SOURCE[0]}" ;;
+      *)  _prereqs_self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")" ;;
+    esac
+  fi
   _refs_dir="$(cd "$(dirname "$_prereqs_self")" && pwd)/references"
+  printf '       mkdir -p "$HOME/.pi/agent"\n'
+  printf '\n'
   printf '       # %s\n' "$PI_MODELS"
   printf '       cat > %s <<'"'"'EOF'"'"'\n' "$PI_MODELS"
-  if [[ -f "$_refs_dir/pi-models.example.json" ]]; then
-    sed 's/^/       /' "$_refs_dir/pi-models.example.json"
+  if [[ -f "$_refs_dir/models.json" ]]; then
+    cat "$_refs_dir/models.json"
   else
-    printf '       # (see references/pi-models.example.json in the firstmate-bridge repo)\n'
+    printf '  # (see references/models.json in the firstmate-bridge repo)\n'
   fi
-  printf '       EOF\n'
+  printf 'EOF\n'
   printf '\n'
   printf '       # %s\n' "$PI_SETTINGS"
   printf '       cat > %s <<'"'"'EOF'"'"'\n' "$PI_SETTINGS"
-  if [[ -f "$_refs_dir/pi-settings.example.json" ]]; then
-    sed 's/^/       /' "$_refs_dir/pi-settings.example.json"
+  if [[ -f "$_refs_dir/settings.json" ]]; then
+    cat "$_refs_dir/settings.json"
   else
-    printf '       # (see references/pi-settings.example.json in the firstmate-bridge repo)\n'
+    printf '  # (see references/settings.json in the firstmate-bridge repo)\n'
   fi
-  printf '       EOF\n'
+  printf 'EOF\n'
   printf '\n'
-  info "see references/pi-models.example.json + references/pi-settings.example.json in this repo"
+  info "see references/models.json + references/settings.json in this repo"
 fi
 
 echo "[11] fm-fleet-snapshot.sh --json"
