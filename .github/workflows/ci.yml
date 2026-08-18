@@ -173,6 +173,7 @@ jobs:
           # checkout is detached at the merge ref, so treehouse (v2.0.1)
           # cannot resolve the default branch in the cold container:
           # "cannot determine default branch". Point origin/HEAD at main.
+          git config --global --add safe.directory /workspace
           git -C /workspace remote set-head origin main
           python3 - <<PY
           import sys
