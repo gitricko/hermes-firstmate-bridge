@@ -22,7 +22,7 @@
 #                                       and pins config/crew-harness = pi)
 
 set -u
-FM_HOME="${FM_HOME:-/config/Documents/_code/firstmate}"
+FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$FM_HOME}"
 BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-/config/.hermes/scripts/firstmate_bridge.py}"
 FIX=0

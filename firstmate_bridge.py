@@ -50,8 +50,8 @@ __all__ = [
     "FirstmateError",
 ]
 
-# Default primary home: env override, else this firstmate clone.
-FM_HOME: Path = Path(os.environ.get("FM_HOME", "/config/Documents/_code/firstmate")).resolve()
+# Default primary home: env override, else ~/Documents/firstmate (installer default).
+FM_HOME: Path = Path(os.environ.get("FM_HOME", os.path.expanduser("~/Documents/firstmate"))).resolve()
 FM_ROOT: Path = Path(os.environ.get("FM_ROOT_OVERRIDE", str(FM_HOME))).resolve()
 FM_BIN: Path = FM_ROOT / "bin"
 

@@ -34,7 +34,7 @@ except Exception:
     print('')
 " 2>/dev/null)"
 fi
-FM_HOME="${FM_HOME:-/config/Documents/_code/firstmate}"
+FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
 
 elapsed=0
 last_event=""
