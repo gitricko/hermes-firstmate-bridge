@@ -25,7 +25,7 @@ echo "  pin       = $(cat "$REF_FILE" 2>/dev/null || echo MISSING)"
 echo ""
 
 # 1. Detect OS deps
-echo "[1/7] Detect OS deps"
+echo "[1/8] Detect OS deps"
 for dep in git node npm; do
   if command -v "$dep" >/dev/null 2>&1; then ok "$dep present"; else fail "$dep MISSING — required"; fi
 done
@@ -40,7 +40,7 @@ fi
 [[ $FAILED -eq 1 ]] && { echo ""; echo "Install aborted: missing OS deps above."; exit 1; }
 
 # 2. Clone + pin firstmate
-echo "[2/7] Clone + pin firstmate"
+echo "[2/8] Clone + pin firstmate"
 if [[ -d "$FM_HOME/.git" ]]; then
   ok "firstmate already at $FM_HOME"
 else
@@ -72,7 +72,7 @@ else
 fi
 
 # 3. Prereqs (treehouse + tasks-axi + pi + jq)
-echo "[3/7] Install prereqs"
+echo "[3/8] Install prereqs"
 export FM_HOME
 if bash "$HERE/firstmate_prereqs.sh" --fix; then
   ok "prereqs met"
@@ -80,8 +80,31 @@ else
   warn "prereqs incomplete — see output above"
 fi
 
-# 4. Pin crew harness = pi
-echo "[4/7] Pin crew harness"
+# 4. Install pi-agent LLM config
+PI_AGENT_DIR="$HOME/.pi/agent"
+echo "[4/8] Install pi-agent LLM config"
+if mkdir -p "$PI_AGENT_DIR" 2>/dev/null; then
+  for f in models.json settings.json; do
+    src="$HERE/references/pi-$f"
+    dst="$PI_AGENT_DIR/$f"
+    if [[ -f "$dst" && ! -f "$dst.bridge-bak" ]]; then
+      cp "$dst" "$dst.bridge-bak"
+      info "backed up existing $dst -> $dst.bridge-bak"
+    fi
+    if [[ -f "$src" ]]; then
+      cp "$src" "$dst"
+      ok "installed $dst"
+    else
+      warn "source $src not found, skipping $dst"
+    fi
+  done
+  info "Installed pi-agent LLM config: $PI_AGENT_DIR/models.json + settings.json"
+else
+  warn "cannot create $PI_AGENT_DIR — skipping pi-agent config install"
+fi
+
+# 5. Pin crew harness = pi
+echo "[5/8] Pin crew harness"
 if [[ -f "$FM_HOME/config/crew-harness" ]]; then
   if [[ "$(cat "$FM_HOME/config/crew-harness")" == "pi" ]]; then
     ok "crew-harness already pi"
@@ -95,8 +118,8 @@ else
   ok "wrote crew-harness = pi"
 fi
 
-# 5. Pre-seed trust
-echo "[5/7] Pre-seed worktree trust"
+# 6. Pre-seed trust
+echo "[6/8] Pre-seed worktree trust"
 # pi: flat {"/abs/path": true} map at ~/.pi/agent/trust.json
 PI_TRUST="$HOME/.pi/agent/trust.json"
 if command -v pi >/dev/null 2>&1 || [[ -f "$PI_TRUST" ]]; then
@@ -133,8 +156,8 @@ PY
   fi
 fi
 
-# 6. Write config
-echo "[6/7] Write firstmate config"
+# 7. Write config
+echo "[7/8] Write firstmate config"
 mkdir -p "$CONFIG_DIR"
 if [[ -f "$CONFIG_FILE" ]]; then
   ok "config already exists: $CONFIG_FILE"
@@ -143,8 +166,8 @@ else
   ok "wrote $CONFIG_FILE"
 fi
 
-# 7. Verify
-echo "[7/7] Verify"
+# 8. Verify
+echo "[8/8] Verify"
 export PATH="$PATH:/config/.local/bin"
 if bash "$HERE/firstmate_prereqs.sh" 2>&1 | grep -q "ALL REQUIRED PREREQUISITES MET"; then
   ok "bridge ready to dispatch"

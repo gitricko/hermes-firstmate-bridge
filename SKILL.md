@@ -128,6 +128,12 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
   watch with `fm-watch.sh` and, on exit `3`, feed the gate
   (`no-mistakes axi respond --action …` in the worktree) or steer via
   `fm-send.sh`; never re-arm a parked crewmate without resolving the gate.
+- **pi-agent LLM config missing**: After installing this skill, verify
+  `~/.pi/agent/models.json` and `~/.pi/agent/settings.json` exist. If not, run
+  `bash install.sh` again or copy `references/pi-models.json` and
+  `references/pi-settings.json` from this repo manually.
+  Without these configs, the pi agent will use defaults that may not match your
+  environment.
 
 ## Verification
 
