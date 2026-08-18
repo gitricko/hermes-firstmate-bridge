@@ -101,10 +101,11 @@ jobs:
           # container. The compose file mounts the config volume (not the
           # checkout), so copy the checkout in after boot.
           docker cp "$GITHUB_WORKSPACE"/. hermes-webtop:/workspace
-          # docker cp lands the checkout as root-owned; the dispatch runs as the
-          # image's abc user (uid 1001), which must be able to write /workspace
-          # (.git for remote set-head, dispatch outputs). Restore ownership.
-          docker exec hermes-webtop chown -R abc:abc /workspace
+          # docker cp lands the checkout as root-owned and the image's abc user
+          # (uid 1001) must be able to write /workspace (.git for remote set-head,
+          # dispatch outputs). Make it writable regardless of the exact abc uid
+          # the dispatch runs as (chown by name can miss a PUID-remapped uid).
+          docker exec hermes-webtop sh -c 'chown -R abc:abc /workspace && chmod -R a+rwX /workspace'
           # Readiness checks unchanged: Hermes gateway :9119 + OmniRoute :20128.
           echo "Waiting for hermes-webtop services (Hermes :9119, OmniRoute :20128)..."
           for i in $(seq 1 120); do
