@@ -29,12 +29,11 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$FM_HOME}"
 BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-}"
 for d in \
   "${BRIDGE_SCRIPT:+$(dirname "$BRIDGE_SCRIPT")}" \
-  "$HOME/.hermes/scripts" \
-  "/config/.hermes/scripts"; do
+  "$HOME/.hermes/scripts"; do
   [[ -z "$d" ]] && continue
   [[ -f "$d/firstmate_bridge.py" ]] && { BRIDGE_SCRIPT="$d/firstmate_bridge.py"; break; }
 done
-BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-/config/.hermes/scripts/firstmate_bridge.py}"
+BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-$HOME/.hermes/scripts/firstmate_bridge.py}"
 FIX=0
 DOCTOR=0
 case "${1:-}" in
@@ -128,7 +127,7 @@ else
   if [[ $FIX -eq 1 ]]; then
     info "attempting install via $FM_ROOT/bin/fm-install-treehouse.sh"
     if [[ -x "$FM_ROOT/bin/fm-install-treehouse.sh" ]]; then
-      DEST="${TREEHOUSE_DEST:-/config/.local/bin}"
+      DEST="${TREEHOUSE_DEST:-$HOME/.local/bin}"
       mkdir -p "$DEST"
       if "$FM_ROOT/bin/fm-install-treehouse.sh" "$DEST"; then
         # make sure it's on PATH for this shell
