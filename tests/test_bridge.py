@@ -44,19 +44,30 @@ class ResolveHomeConfigTests(unittest.TestCase):
             self.assertEqual(str(mod.resolve_home("primary")), "/from/env")
 
     def test_config_primary_resolves(self):
-        """_read_primary_home_from_config returns the expanded primary path."""
+        """Config file primary home is resolved when FM_HOME is unset."""
         d = Path(tempfile.mkdtemp())
         hermes_cfg = d / ".hermes" / "config" / "firstmate.json"
         hermes_cfg.parent.mkdir(parents=True)
         hermes_cfg.write_text(json.dumps({"homes": {"primary": "/cfg/home"}}))
         with mock.patch.dict(os.environ, {"HOME": str(d)}):
-            result = fb._read_primary_home_from_config()
-            self.assertIsNotNone(result)
-            self.assertEqual(str(result), str(Path("/cfg/home").resolve()))
+            _spec2 = importlib.util.spec_from_file_location(
+                "firstmate_bridge_cfg", str(REPO_ROOT / "firstmate_bridge.py")
+            )
+            assert _spec2 is not None and _spec2.loader is not None
+            mod = importlib.util.module_from_spec(_spec2)
+            _spec2.loader.exec_module(mod)
+            self.assertEqual(str(mod.resolve_home("primary")), str(Path("/cfg/home").resolve()))
 
-    def test_missing_config_returns_none(self):
+    def test_missing_config_returns_default(self):
         with mock.patch.dict(os.environ, {"HOME": str(Path(tempfile.mkdtemp()))}):
-            self.assertIsNone(fb._read_primary_home_from_config())
+            _spec2 = importlib.util.spec_from_file_location(
+                "firstmate_bridge_nocfg", str(REPO_ROOT / "firstmate_bridge.py")
+            )
+            assert _spec2 is not None and _spec2.loader is not None
+            mod = importlib.util.module_from_spec(_spec2)
+            _spec2.loader.exec_module(mod)
+            expected = str(Path(os.path.expanduser("~/Documents/firstmate")).resolve())
+            self.assertEqual(str(mod.resolve_home("primary")), expected)
 
     def test_named_selector_fails_closed(self):
         with self.assertRaises(fb.FirstmateError):

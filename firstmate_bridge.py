@@ -123,27 +123,6 @@ except ImportError:  # pragma: no cover - non-POSIX
     fcntl = None  # type: ignore
 
 
-def _read_primary_home_from_config() -> Path | None:
-    """Read homes.primary from ~/.hermes/config/firstmate.json if present.
-
-    Mirrors the discovery logic fm-watch.sh / install.sh use, so an agent that
-    has only written the config file (no FM_HOME env) can still resolve home.
-    Returns None when the config file is absent or has no primary home.
-    """
-    cfg = Path(os.path.expanduser("~/.hermes/config/firstmate.json"))
-    if not cfg.is_file():
-        return None
-    try:
-        data = json.loads(cfg.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    homes = data.get("homes") if isinstance(data, dict) else None
-    primary = homes.get("primary") if isinstance(homes, dict) else None
-    if not primary or not isinstance(primary, str):
-        return None
-    return Path(os.path.expanduser(primary)).resolve()
-
-
 # Resolved primary home: env override (FM_HOME) → config file → installer default.
 # An explicit FM_HOME always wins; the config file is honored only when the env
 # var is unset; otherwise we fall back to the installer default.
@@ -151,9 +130,14 @@ _env_home = os.environ.get("FM_HOME")
 if _env_home:
     FM_HOME: Path = Path(os.path.expanduser(_env_home)).resolve()
 else:
-    FM_HOME: Path = _read_primary_home_from_config() or Path(
-        os.path.expanduser("~/Documents/firstmate")
-    ).resolve()
+    cfg = Path(os.path.expanduser("~/.hermes/config/firstmate.json"))
+    FM_HOME = (
+        Path(os.path.expanduser(
+            json.loads(cfg.read_text()).get("homes", {}).get("primary", "")
+        )).resolve()
+        if cfg.is_file() and json.loads(cfg.read_text()).get("homes", {}).get("primary")
+        else Path(os.path.expanduser("~/Documents/firstmate")).resolve()
+    )
 FM_ROOT: Path = Path(os.environ.get("FM_ROOT_OVERRIDE", str(FM_HOME))).resolve()
 FM_BIN: Path = FM_ROOT / "bin"
 

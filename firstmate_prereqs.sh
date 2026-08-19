@@ -25,24 +25,16 @@
 set -u
 FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$FM_HOME}"
-# Resolve the bridge module from multiple candidate locations so prereqs import
-# it in ANY environment — not just hermes-webtop's /config/.hermes/scripts.
-# Precedence: explicit $BRIDGE_SCRIPT override → this skill's dir → the user's
-# ~/.hermes/scripts (populated by install.sh) → the legacy /config/.hermes/scripts.
-BRIDGE_DIRS=(
-  "${BRIDGE_SCRIPT:+$(dirname "$BRIDGE_SCRIPT")}"
-  "$(dirname "${BASH_SOURCE[0]}")"
-  "$HOME/.hermes/scripts"
-  "/config/.hermes/scripts"
-)
-BRIDGE_SCRIPT="/config/.hermes/scripts/firstmate_bridge.py"  # default fallback
-for d in "${BRIDGE_DIRS[@]}"; do
+# Resolve bridge module: explicit override → installed location → legacy container
+BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-}"
+for d in \
+  "${BRIDGE_SCRIPT:+$(dirname "$BRIDGE_SCRIPT")}" \
+  "$HOME/.hermes/scripts" \
+  "/config/.hermes/scripts"; do
   [[ -z "$d" ]] && continue
-  if [[ -f "$d/firstmate_bridge.py" ]]; then
-    BRIDGE_SCRIPT="$d/firstmate_bridge.py"
-    break
-  fi
+  [[ -f "$d/firstmate_bridge.py" ]] && { BRIDGE_SCRIPT="$d/firstmate_bridge.py"; break; }
 done
+BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-/config/.hermes/scripts/firstmate_bridge.py}"
 FIX=0
 DOCTOR=0
 case "${1:-}" in
@@ -52,16 +44,17 @@ esac
 
 pass=0; fail=0
 CHK_NAMES=(); CHK_STATUS=()
-# In --doctor mode, the human-readable report must go to stderr so stdout stays
-# pure JSON (machine-parseable by agents). Redirect function output accordingly.
+
+# In --doctor mode: human report goes to stderr, JSON goes to stdout
 if [[ $DOCTOR -eq 1 ]]; then
-  exec 3>&1 1>&2   # save original stdout on fd3, point stdout to stderr
+  exec 3>&1  # save original stdout on fd3 for JSON output
+  exec 1>&2  # redirect stdout to stderr for human report
 fi
-_record() { CHK_NAMES+=("$1"); CHK_STATUS+=("$2"); }
-ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); _record "$1" PASS; }
-bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); _record "$1" FAIL; }
-fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; _record "$1" FIXED; }
-warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; _record "$1" WARN; }
+
+ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); CHK_NAMES+=("$1"); CHK_STATUS+=("PASS"); }
+bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); CHK_NAMES+=("$1"); CHK_STATUS+=("FAIL"); }
+fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; CHK_NAMES+=("$1"); CHK_STATUS+=("FIXED"); }
+warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; CHK_NAMES+=("$1"); CHK_STATUS+=("WARN"); }
 info() { printf '  \033[36mINFO\033[0m %s\n' "$1"; }
 
 echo "firstmate-bridge prerequisite check"
@@ -325,29 +318,13 @@ echo ""
 # --doctor: emit machine-readable JSON {checks, all_passed, missing} for
 # autonomous recovery (agents parse it to install only what's missing).
 if [[ $DOCTOR -eq 1 ]]; then
-  python3 - "$fail" "${CHK_NAMES[@]/#/NAME=}" "${CHK_STATUS[@]/#/STATUS=}" >&3 <<'PY'
-import json, sys
-fail = int(sys.argv[1])
-args = sys.argv[2:]
-names, statuses = [], []
-i = 0
-while i < len(args):
-    if args[i].startswith("NAME="):
-        names.append(args[i][5:])
-        i += 1
-    elif args[i].startswith("STATUS="):
-        statuses.append(args[i][7:])
-        i += 1
-    else:
-        i += 1
-checks = [{"name": n, "status": s} for n, s in zip(names, statuses)]
-missing = [c["name"] for c in checks if c["status"] == "FAIL"]
-print(json.dumps({
-    "all_passed": fail == 0,
-    "checks": checks,
-    "missing": missing,
-}, indent=2))
-PY
+  # Build JSON array of checks from recorded arrays
+  json_checks='[]'
+  for i in "${!CHK_NAMES[@]}"; do
+    json_checks=$(jq -n --argjson checks "$json_checks" --arg name "${CHK_NAMES[i]}" --arg status "${CHK_STATUS[i]}" '$checks + [{"name": $name, "status": $status}]')
+  done
+  missing_json=$(jq -n --argjson checks "$json_checks" '$checks | map(select(.status=="FAIL")) | map(.name)')
+  jq -n --argjson checks "$json_checks" --argjson missing "$missing_json" --argjson all_passed "$([[ $fail -eq 0 ]] && echo true || echo false)" '{all_passed: $all_passed, checks: $checks, missing: $missing}' >&3
   exit 0
 fi
 
