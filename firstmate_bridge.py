@@ -131,13 +131,17 @@ if _env_home:
     FM_HOME: Path = Path(os.path.expanduser(_env_home)).resolve()
 else:
     cfg = Path(os.path.expanduser("~/.hermes/config/firstmate.json"))
-    FM_HOME = (
-        Path(os.path.expanduser(
-            json.loads(cfg.read_text()).get("homes", {}).get("primary", "")
-        )).resolve()
-        if cfg.is_file() and json.loads(cfg.read_text()).get("homes", {}).get("primary")
-        else Path(os.path.expanduser("~/Documents/firstmate")).resolve()
-    )
+    primary = None
+    if cfg.is_file():
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+            primary = data.get("homes", {}).get("primary")
+        except (json.JSONDecodeError, OSError):
+            pass  # malformed/unreadable config → fall back to default
+    if isinstance(primary, str) and primary:
+        FM_HOME = Path(os.path.expanduser(primary)).resolve()
+    else:
+        FM_HOME = Path(os.path.expanduser("~/Documents/firstmate")).resolve()
 FM_ROOT: Path = Path(os.environ.get("FM_ROOT_OVERRIDE", str(FM_HOME))).resolve()
 FM_BIN: Path = FM_ROOT / "bin"
 
