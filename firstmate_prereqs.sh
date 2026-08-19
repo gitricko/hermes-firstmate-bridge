@@ -25,15 +25,43 @@
 set -u
 FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$FM_HOME}"
-BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-/config/.hermes/scripts/firstmate_bridge.py}"
+# Resolve the bridge module from multiple candidate locations so prereqs import
+# it in ANY environment — not just hermes-webtop's /config/.hermes/scripts.
+# Precedence: explicit $BRIDGE_SCRIPT override → this skill's dir → the user's
+# ~/.hermes/scripts (populated by install.sh) → the legacy /config/.hermes/scripts.
+BRIDGE_DIRS=(
+  "${BRIDGE_SCRIPT:+$(dirname "$BRIDGE_SCRIPT")}"
+  "$(dirname "${BASH_SOURCE[0]}")"
+  "$HOME/.hermes/scripts"
+  "/config/.hermes/scripts"
+)
+BRIDGE_SCRIPT="/config/.hermes/scripts/firstmate_bridge.py"  # default fallback
+for d in "${BRIDGE_DIRS[@]}"; do
+  [[ -z "$d" ]] && continue
+  if [[ -f "$d/firstmate_bridge.py" ]]; then
+    BRIDGE_SCRIPT="$d/firstmate_bridge.py"
+    break
+  fi
+done
 FIX=0
-[[ "${1:-}" == "--fix" ]] && FIX=1
+DOCTOR=0
+case "${1:-}" in
+  --fix)    FIX=1 ;;
+  --doctor) DOCTOR=1 ;;
+esac
 
 pass=0; fail=0
-ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); }
-bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); }
-fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; }
-warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
+CHK_NAMES=(); CHK_STATUS=()
+# In --doctor mode, the human-readable report must go to stderr so stdout stays
+# pure JSON (machine-parseable by agents). Redirect function output accordingly.
+if [[ $DOCTOR -eq 1 ]]; then
+  exec 3>&1 1>&2   # save original stdout on fd3, point stdout to stderr
+fi
+_record() { CHK_NAMES+=("$1"); CHK_STATUS+=("$2"); }
+ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); _record "$1" PASS; }
+bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); _record "$1" FAIL; }
+fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; _record "$1" FIXED; }
+warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; _record "$1" WARN; }
 info() { printf '  \033[36mINFO\033[0m %s\n' "$1"; }
 
 echo "firstmate-bridge prerequisite check"
@@ -294,6 +322,35 @@ else
 fi
 
 echo ""
+# --doctor: emit machine-readable JSON {checks, all_passed, missing} for
+# autonomous recovery (agents parse it to install only what's missing).
+if [[ $DOCTOR -eq 1 ]]; then
+  python3 - "$fail" "${CHK_NAMES[@]/#/NAME=}" "${CHK_STATUS[@]/#/STATUS=}" >&3 <<'PY'
+import json, sys
+fail = int(sys.argv[1])
+args = sys.argv[2:]
+names, statuses = [], []
+i = 0
+while i < len(args):
+    if args[i].startswith("NAME="):
+        names.append(args[i][5:])
+        i += 1
+    elif args[i].startswith("STATUS="):
+        statuses.append(args[i][7:])
+        i += 1
+    else:
+        i += 1
+checks = [{"name": n, "status": s} for n, s in zip(names, statuses)]
+missing = [c["name"] for c in checks if c["status"] == "FAIL"]
+print(json.dumps({
+    "all_passed": fail == 0,
+    "checks": checks,
+    "missing": missing,
+}, indent=2))
+PY
+  exit 0
+fi
+
 if [[ $fail -eq 0 ]]; then
   echo "RESULT: \033[32mALL REQUIRED PREREQUISITES MET\033[0m — bridge ready to dispatch."
   exit 0
