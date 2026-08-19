@@ -30,6 +30,15 @@ jobs:
       - name: Module parses
         run: "python3 -c \"import ast; ast.parse(open('firstmate_bridge.py').read()); print('ok module parses')\""
 
+  test:
+    name: Python unit tests (test 7)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run unit tests
+        run: |
+          python3 -m unittest tests.test_bridge -v
+
   prereqs:
     name: Prereqs in clean env (test 1)
     runs-on: ubuntu-latest
@@ -47,8 +56,8 @@ jobs:
       - name: Run prereqs --fix
         run: |
           FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh --fix
-          # treehouse --fix installs to /config/.local/bin; persist it for later steps
-          echo "PATH=/config/.local/bin:$PATH" >> "$GITHUB_ENV"
+          # treehouse --fix installs to $TREEHOUSE_DEST (default $HOME/.local/bin); persist it for later steps
+          echo "PATH=$HOME/.local/bin:$PATH" >> "$GITHUB_ENV"
       - name: Assert all prereqs met
         run: |
           FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh | grep -q "ALL REQUIRED PREREQUISITES MET" && echo "PASS" || { echo "FAIL"; exit 1; }

@@ -74,6 +74,16 @@ fi
 # 3. Prereqs (treehouse + tasks-axi + pi + jq)
 echo "[3/7] Install prereqs"
 export FM_HOME
+# Let agents recover in any (non-root) environment: install treehouse into the
+# user-writable bin dir instead of the hardcoded /config/.local/bin. The prereq
+# script already honors $TREEHOUSE_DEST when set, so we just seed it here.
+export TREEHOUSE_DEST="${TREEHOUSE_DEST:-$HOME/.local/bin}"
+# Make the bridge importable everywhere Hermes runs (on sys.path via
+# start-hermes.sh), so firstmate_prereqs.sh / firstmate_bridge.py resolve without
+# a hard-coded /config/.hermes/scripts path.
+mkdir -p "$HOME/.hermes/scripts"
+cp "$HERE/firstmate_bridge.py" "$HOME/.hermes/scripts/firstmate_bridge.py"
+ok "bridge module copied to $HOME/.hermes/scripts"
 if bash "$HERE/firstmate_prereqs.sh" --fix; then
   ok "prereqs met"
 else

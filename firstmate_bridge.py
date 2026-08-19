@@ -50,12 +50,6 @@ __all__ = [
     "FirstmateError",
 ]
 
-# Default primary home: env override, else ~/Documents/firstmate (installer default).
-FM_HOME: Path = Path(os.environ.get("FM_HOME", os.path.expanduser("~/Documents/firstmate"))).resolve()
-FM_ROOT: Path = Path(os.environ.get("FM_ROOT_OVERRIDE", str(FM_HOME))).resolve()
-FM_BIN: Path = FM_ROOT / "bin"
-
-
 class FirstmateError(RuntimeError):
     """Raised when a firstmate bin/ script fails or returns no parseable data."""
 
@@ -129,8 +123,36 @@ except ImportError:  # pragma: no cover - non-POSIX
     fcntl = None  # type: ignore
 
 
+# Resolved primary home: env override (FM_HOME) → config file → installer default.
+# An explicit FM_HOME always wins; the config file is honored only when the env
+# var is unset; otherwise we fall back to the installer default.
+_env_home = os.environ.get("FM_HOME")
+if _env_home:
+    FM_HOME: Path = Path(os.path.expanduser(_env_home)).resolve()
+else:
+    cfg = Path(os.path.expanduser("~/.hermes/config/firstmate.json"))
+    primary = None
+    if cfg.is_file():
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+            primary = data.get("homes", {}).get("primary")
+        except (json.JSONDecodeError, OSError):
+            pass  # malformed/unreadable config → fall back to default
+    if isinstance(primary, str) and primary:
+        FM_HOME = Path(os.path.expanduser(primary)).resolve()
+    else:
+        FM_HOME = Path(os.path.expanduser("~/Documents/firstmate")).resolve()
+FM_ROOT: Path = Path(os.environ.get("FM_ROOT_OVERRIDE", str(FM_HOME))).resolve()
+FM_BIN: Path = FM_ROOT / "bin"
+
+
 def resolve_home(selector: str | None = None) -> Path:
     """Resolve an explicit FM_HOME. Fail closed on ambiguity.
+
+    Resolution order for the primary home:
+      1. FM_HOME env var (always wins when set)
+      2. ~/.hermes/config/firstmate.json → homes.primary
+      3. installer default ~/Documents/firstmate
 
     Selector semantics (Phase 1): None or "primary" → the configured primary home.
     Named secondmates ("sg", "remote-A") are a Phase 5 feature; referenced here only

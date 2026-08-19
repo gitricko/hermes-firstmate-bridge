@@ -25,15 +25,35 @@
 set -u
 FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$FM_HOME}"
-BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-/config/.hermes/scripts/firstmate_bridge.py}"
+# Resolve bridge module: explicit override → installed location → legacy container
+BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-}"
+for d in \
+  "${BRIDGE_SCRIPT:+$(dirname "$BRIDGE_SCRIPT")}" \
+  "$HOME/.hermes/scripts"; do
+  [[ -z "$d" ]] && continue
+  [[ -f "$d/firstmate_bridge.py" ]] && { BRIDGE_SCRIPT="$d/firstmate_bridge.py"; break; }
+done
+BRIDGE_SCRIPT="${BRIDGE_SCRIPT:-$HOME/.hermes/scripts/firstmate_bridge.py}"
 FIX=0
-[[ "${1:-}" == "--fix" ]] && FIX=1
+DOCTOR=0
+case "${1:-}" in
+  --fix)    FIX=1 ;;
+  --doctor) DOCTOR=1 ;;
+esac
 
 pass=0; fail=0
-ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); }
-bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); }
-fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; }
-warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; }
+CHK_NAMES=(); CHK_STATUS=()
+
+# In --doctor mode: human report goes to stderr, JSON goes to stdout
+if [[ $DOCTOR -eq 1 ]]; then
+  exec 3>&1  # save original stdout on fd3 for JSON output
+  exec 1>&2  # redirect stdout to stderr for human report
+fi
+
+ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; pass=$((pass+1)); CHK_NAMES+=("$1"); CHK_STATUS+=("PASS"); }
+bad()  { printf '  \033[31mFAIL\033[0m %s\n' "$1"; fail=$((fail+1)); CHK_NAMES+=("$1"); CHK_STATUS+=("FAIL"); }
+fixed(){ printf '  \033[32mFIXED\033[0m %s\n' "$1"; if [[ $fail -gt 0 ]]; then fail=$((fail-1)); fi; CHK_NAMES+=("$1"); CHK_STATUS+=("FIXED"); }
+warn() { printf '  \033[33mWARN\033[0m %s\n' "$1"; CHK_NAMES+=("$1"); CHK_STATUS+=("WARN"); }
 info() { printf '  \033[36mINFO\033[0m %s\n' "$1"; }
 
 echo "firstmate-bridge prerequisite check"
@@ -107,7 +127,7 @@ else
   if [[ $FIX -eq 1 ]]; then
     info "attempting install via $FM_ROOT/bin/fm-install-treehouse.sh"
     if [[ -x "$FM_ROOT/bin/fm-install-treehouse.sh" ]]; then
-      DEST="${TREEHOUSE_DEST:-/config/.local/bin}"
+      DEST="${TREEHOUSE_DEST:-$HOME/.local/bin}"
       mkdir -p "$DEST"
       if "$FM_ROOT/bin/fm-install-treehouse.sh" "$DEST"; then
         # make sure it's on PATH for this shell
@@ -294,6 +314,19 @@ else
 fi
 
 echo ""
+# --doctor: emit machine-readable JSON {checks, all_passed, missing} for
+# autonomous recovery (agents parse it to install only what's missing).
+if [[ $DOCTOR -eq 1 ]]; then
+  # Build JSON array of checks from recorded arrays
+  json_checks='[]'
+  for i in "${!CHK_NAMES[@]}"; do
+    json_checks=$(jq -n --argjson checks "$json_checks" --arg name "${CHK_NAMES[i]}" --arg status "${CHK_STATUS[i]}" '$checks + [{"name": $name, "status": $status}]')
+  done
+  missing_json=$(jq -n --argjson checks "$json_checks" '$checks | map(select(.status=="FAIL")) | map(.name)')
+  jq -n --argjson checks "$json_checks" --argjson missing "$missing_json" --argjson all_passed "$([[ $fail -eq 0 ]] && echo true || echo false)" '{all_passed: $all_passed, checks: $checks, missing: $missing}' >&3
+  exit 0
+fi
+
 if [[ $fail -eq 0 ]]; then
   echo "RESULT: \033[32mALL REQUIRED PREREQUISITES MET\033[0m — bridge ready to dispatch."
   exit 0
