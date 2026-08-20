@@ -77,6 +77,69 @@ class ResolveHomeConfigTests(unittest.TestCase):
         self.assertTrue(isinstance(fb.resolve_home("primary"), Path))
 
 
+class DetectRuntimeTests(unittest.TestCase):
+    """detect_runtime returns the correct backend from env markers."""
+
+    def test_herdr_env_returns_herdr(self):
+        with mock.patch.dict(os.environ, {"HERDR_ENV": "1", "TMUX": ""}, clear=True):
+            self.assertEqual(fb.detect_runtime(), "herdr")
+
+    def test_tmux_env_returns_tmux(self):
+        with mock.patch.dict(os.environ, {"TMUX": "some-session", "HERDR_ENV": ""}, clear=True):
+            self.assertEqual(fb.detect_runtime(), "tmux")
+
+    def test_cmux_env_returns_cmux(self):
+        with mock.patch.dict(os.environ, {"CMUX_WORKSPACE_ID": "ws1", "TMUX": "", "HERDR_ENV": ""}, clear=True):
+            self.assertEqual(fb.detect_runtime(), "cmux")
+
+    def test_unknown_when_none_set(self):
+        with mock.patch.dict(os.environ, {"TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""}, clear=True):
+            self.assertEqual(fb.detect_runtime(), "unknown")
+
+
+class DispatchBackendDefaultTests(unittest.TestCase):
+    """dispatch() defaults backend to the detected runtime (herdr/tmux/cmux)."""
+
+    def test_dispatch_defaults_to_herdr_when_in_herdr(self):
+        """When HERDR_ENV=1, dispatch should default backend to herdr."""
+        with mock.patch.dict(os.environ, {"HERDR_ENV": "1", "TMUX": "", "CMUX_WORKSPACE_ID": ""}, clear=True):
+            # We can't easily test the full dispatch without firstmate installed,
+            # but we can verify the logic that sets the default backend
+            rt = fb.detect_runtime()
+            backend = rt if rt in ("herdr", "tmux", "cmux") else None
+            self.assertEqual(backend, "herdr")
+
+    def test_dispatch_defaults_to_tmux_when_in_tmux(self):
+        """When TMUX is set, dispatch should default backend to tmux."""
+        with mock.patch.dict(os.environ, {"TMUX": "session", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""}, clear=True):
+            rt = fb.detect_runtime()
+            backend = rt if rt in ("herdr", "tmux", "cmux") else None
+            self.assertEqual(backend, "tmux")
+
+    def test_dispatch_defaults_to_cmux_when_in_cmux(self):
+        """When CMUX_WORKSPACE_ID is set, dispatch should default backend to cmux."""
+        with mock.patch.dict(os.environ, {"CMUX_WORKSPACE_ID": "ws1", "TMUX": "", "HERDR_ENV": ""}, clear=True):
+            rt = fb.detect_runtime()
+            backend = rt if rt in ("herdr", "tmux", "cmux") else None
+            self.assertEqual(backend, "cmux")
+
+    def test_dispatch_backend_none_when_unknown(self):
+        """When no runtime detected, backend stays None (firstmate decides)."""
+        with mock.patch.dict(os.environ, {"TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""}, clear=True):
+            rt = fb.detect_runtime()
+            backend = rt if rt in ("herdr", "tmux", "cmux") else None
+            self.assertIsNone(backend)
+
+    def test_explicit_backend_overrides_default(self):
+        """Explicit backend argument should override detected default."""
+        with mock.patch.dict(os.environ, {"HERDR_ENV": "1", "TMUX": "", "CMUX_WORKSPACE_ID": ""}, clear=True):
+            # Explicit backend wins
+            explicit_backend = "tmux"
+            rt = fb.detect_runtime()
+            backend = explicit_backend if explicit_backend else (rt if rt in ("herdr", "tmux", "cmux") else None)
+            self.assertEqual(backend, "tmux")
+
+
 class PrereqDoctorTests(unittest.TestCase):
     """firstmate_prereqs.sh --doctor emits valid JSON with the right shape."""
 

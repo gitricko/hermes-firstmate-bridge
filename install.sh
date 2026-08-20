@@ -8,6 +8,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_REPO_URL="${FM_REPO_URL:-https://github.com/kunchenguid/firstmate.git}"
 FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
 REF_FILE="$HERE/.firstmate-ref"
+BACKEND_REF_FILE="$HERE/.firstmate-backend-ref"
 CONFIG_DIR="$HOME/.hermes/config"
 CONFIG_FILE="$CONFIG_DIR/firstmate.json"
 
@@ -21,7 +22,8 @@ FAILED=0
 echo "== firstmate-bridge install =="
 echo "  FM_HOME   = $FM_HOME"
 echo "  FM source = $FM_REPO_URL"
-echo "  pin       = $(cat "$REF_FILE" 2>/dev/null || echo MISSING)"
+echo "  skill pin = $(cat "$REF_FILE" 2>/dev/null || echo MISSING)"
+echo "  backend   = $(cat "$BACKEND_REF_FILE" 2>/dev/null || echo MISSING)"
 echo ""
 
 # 1. Detect OS deps
@@ -52,23 +54,23 @@ else
     fail "git clone failed"; echo ""; echo "Install aborted."; exit 1
   fi
 fi
-PIN="$(cat "$REF_FILE" 2>/dev/null || echo "")"
-if [[ -n "$PIN" ]]; then
-  if git -C "$FM_HOME" rev-parse --verify "$PIN" >/dev/null 2>&1; then
-    git -C "$FM_HOME" checkout --detach "$PIN" >/dev/null 2>&1
-    ok "pinned to $PIN"
+BACKEND_PIN="$(cat "$BACKEND_REF_FILE" 2>/dev/null || echo "")"
+if [[ -n "$BACKEND_PIN" ]]; then
+  if git -C "$FM_HOME" rev-parse --verify "$BACKEND_PIN" >/dev/null 2>&1; then
+    git -C "$FM_HOME" checkout --detach "$BACKEND_PIN" >/dev/null 2>&1
+    ok "pinned to backend $BACKEND_PIN"
   else
-    info "pin $PIN not local; fetching"
+    info "backend pin $BACKEND_PIN not local; fetching"
     git -C "$FM_HOME" fetch origin >/dev/null 2>&1
-    if git -C "$FM_HOME" rev-parse --verify "$PIN" >/dev/null 2>&1; then
-      git -C "$FM_HOME" checkout --detach "$PIN" >/dev/null 2>&1
-      ok "pinned to $PIN"
+    if git -C "$FM_HOME" rev-parse --verify "$BACKEND_PIN" >/dev/null 2>&1; then
+      git -C "$FM_HOME" checkout --detach "$BACKEND_PIN" >/dev/null 2>&1
+      ok "pinned to backend $BACKEND_PIN"
     else
-      warn "pin $PIN not found on remote — leaving firstmate at HEAD (update .firstmate-ref)"
+      warn "backend pin $BACKEND_PIN not found on remote — leaving firstmate at HEAD (update .firstmate-backend-ref)"
     fi
   fi
 else
-  warn ".firstmate-ref empty — firstmate at HEAD"
+  warn ".firstmate-backend-ref empty — firstmate at HEAD"
 fi
 
 # 3. Prereqs (treehouse + tasks-axi + pi + jq)
@@ -118,8 +120,9 @@ d = {}
 if os.path.exists(path):
     try: d = json.load(open(path))
     except Exception: d = {}
-d["/config/.treehouse"] = True          # covers every future treehouse worktree root
-d[fm_home] = True                        # the project itself
+# treehouse worktree root is ~/.treehouse (not hardcoded /config/.treehouse)
+d[os.path.join(os.path.expanduser("~"), ".treehouse")] = True
+d[fm_home] = True
 json.dump(d, open(path, "w"), indent=2)
 print(f"  OK   pi trust seeded: {list(d.keys())}")
 PY
@@ -135,7 +138,8 @@ import json, os, sys
 path, fm_home = sys.argv[1], sys.argv[2]
 d = json.load(open(path))
 td = d.setdefault("trustedDirs", [])
-for add in ("/config/.treehouse", fm_home):
+treehouse_root = os.path.join(os.path.expanduser("~"), ".treehouse")
+for add in (treehouse_root, fm_home):
     if add not in td: td.append(add)
 json.dump(d, open(path, "w"))
 print("  OK   claude trustedDirs seeded")
@@ -155,7 +159,7 @@ fi
 
 # 7. Verify
 echo "[7/7] Verify"
-export PATH="$PATH:/config/.local/bin"
+export PATH="$PATH:$HOME/.local/bin"
 if bash "$HERE/firstmate_prereqs.sh" 2>&1 | grep -q "ALL REQUIRED PREREQUISITES MET"; then
   ok "bridge ready to dispatch"
   echo ""

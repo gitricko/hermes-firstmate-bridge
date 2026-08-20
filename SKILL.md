@@ -8,7 +8,7 @@ platforms: [linux, macos]
 metadata:
   hermes:
     tags: [firstmate, crew, delegation, captain, herdr]
-    related_skills: [coding-agent-orchestration, computer-use]
+    related_skills: [computer-use]
 ---
 
 # firstmate-bridge
@@ -28,6 +28,9 @@ firstmate bin/ scripts it wraps.
 - A herdr terminal is detected (`HERDR_ENV=1` / `$TMUX` /
   `CMUX_WORKSPACE_ID`) and a code-work request is present → offer firstmate as
   the default suggestion; never auto-dispatch without explicit "use firstmate".
+- When Hermes runs inside herdr (or tmux/cmux), `dispatch()` defaults the
+  crewmate backend to that same multiplexer so the crew stays visible where the
+  captain already is. Explicit `backend=` argument always overrides.
 
 Don't use for: plain chat, questions, ops requests, or work inside `~/.hermes`
 glue files — crewmates never touch files outside their project worktree, and
@@ -108,8 +111,8 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
 ## Pitfalls
 
 - **Trust prompts**: firstmate's worktrees are fresh paths; harnesses prompt
-  "trust this folder?" once. Pre-seed trust: `/config/.pi/agent/trust.json` is
-  a flat `{"/abs/path": true}` map (pi), `.claude.json` `trustedDirs` (claude).
+  "trust this folder?" once. Pre-seed trust: `~/.pi/agent/trust.json` is
+  a flat `{"abs/path": true}` map (pi), `.claude.json` `trustedDirs` (claude).
   Without pre-seeding, the crewmate blocks on an interactive prompt.
 - **`tasks-axi` missing** ⇒ teardown refuses (decision-hold gate); install with
   `npm install -g tasks-axi` and re-run prereqs.
@@ -135,6 +138,12 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
   in this repo for templates. `firstmate_prereqs.sh` [10] will WARN (not FAIL)
   when these files are absent — copy the templates in yourself; the bridge
   intentionally does NOT auto-install provider configs.
+- **pi-agent + large brief hangs**: when pi-agent is given a full encoded brief
+  (via `fm-operational-input.sh encode launch-brief`) with the firstmate
+  extension loaded, it can hang indefinitely (>30s) without output. Short
+  prompts (<200 bytes) work reliably. This appears to be an LLM call timeout/
+  stall with omniroute when the brief is large and complex. Workaround: keep
+  briefs concise or debug omniroute/pi-agent config.
 
 ## Verification
 
@@ -142,3 +151,4 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
 - `snapshot()` returns `schema: fm-fleet-snapshot.v1` with a `tasks` list.
 - A scout dispatch (< 60s) produces a report at
   `data/<task-id>/report.md` and teardown closes it without `--force`.
+- Run tests: `python3 -m unittest tests.test_bridge -v` (from skill dir) — all tests pass.

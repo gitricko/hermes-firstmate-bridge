@@ -47,6 +47,7 @@ __all__ = [
     "merge",
     "decide",
     "teardown",
+    "watch",
     "FirstmateError",
 ]
 
@@ -268,6 +269,13 @@ def dispatch(
         raise FirstmateError(f"brief not created at {brief_path}")
     _replace_task_in_brief(brief_path, request)
 
+    # Default the backend to the runtime we're actually running in, so a crew
+    # spawned under herdr (or tmux/cmux) stays in that multiplexer and the
+    # captain can supervise it where they already are. Explicit arg still wins.
+    if backend is None:
+        rt = detect_runtime()
+        backend = rt if rt in ("herdr", "tmux", "cmux") else None
+
     # 2. spawn the crewmate (claude default; backend auto-detected unless given)
     spawn_cmd = [str(FM_BIN / "fm-spawn.sh"), tid, str(project)]
     if kind == "scout":
@@ -347,6 +355,39 @@ def decide(
 
 def teardown(task_id: str, *, home: str | Path | None = None) -> dict:
     return _run([str(FM_BIN / "fm-teardown.sh"), task_id], home=resolve_home(home))
+
+
+def watch(
+    task_id: str,
+    *,
+    home: str | Path | None = None,
+    timeout: int = 600,
+    poll: int = 10,
+) -> dict:
+    """Watch a crewmate task via bin/fm-watch.sh, returning parsed state.
+
+    Mirrors fm-watch.sh's exit semantics:
+      0 = terminal (done/failed/blocked with PR URL)
+      3 = parked / pending_decision (feed the no-mistakes gate)
+      2 = timeout (re-arm to continue)
+      1 = error
+
+    Args:
+      task_id: firstmate task id to watch
+      home: FM_HOME override (default: resolved primary home)
+      timeout: max seconds to wait before returning exit code 2
+      poll: interval between state checks (passed to fm-watch.sh)
+
+    Returns: parsed JSON with at least {"exit_code": int, "stdout": str}.
+    """
+    home_p = resolve_home(home if home is None else str(home))
+    cmd = [
+        str(FM_BIN / "fm-watch.sh"),
+        task_id,
+        "--timeout", str(timeout),
+        "--poll", str(poll),
+    ]
+    return _run(cmd, home=home_p, timeout=timeout + 30)
 
 
 if __name__ == "__main__":

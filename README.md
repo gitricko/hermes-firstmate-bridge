@@ -17,7 +17,7 @@ bash ~/.hermes/skills/productivity/firstmate-bridge/install.sh
 That's it. `install.sh` will:
 
 1. Detect OS deps (git, node, npm; herdr/tmux recommended)
-2. Clone firstmate and pin it to the SHA in `.firstmate-ref` (upstream + commit pin — no fork needed)
+2. Clone firstmate and pin it to the SHA in `.firstmate-backend-ref` (upstream + backend commit pin — no fork needed)
 3. Install prereqs via `firstmate_prereqs.sh --fix` (treehouse, tasks-axi, pi, jq)
 4. Pin the crew harness to `pi` (`config/crew-harness`)
 5. Pre-seed worktree trust (pi trust.json + claude trustedDirs)
@@ -32,7 +32,8 @@ That's it. `install.sh` will:
 | `firstmate_bridge.py` | Glue module: snapshot / detect_runtime / resolve_home / dispatch / steer / decide / interrupt / exit / merge / teardown |
 | `firstmate_prereqs.sh` | Checker + installer (`--fix`): treehouse, tasks-axi, pi, jq, FM_HOME, crew-harness, snapshot probe |
 | `install.sh` | One-shot bootstrap (see Quickstart) |
-| `.firstmate-ref` | Pinned firstmate commit SHA — the version freeze |
+| `.firstmate-ref` | Pinned skill commit SHA — the skill version freeze |
+| `.firstmate-backend-ref` | Pinned firstmate backend commit SHA — the backend version freeze |
 
 ## Requirements
 
@@ -42,7 +43,12 @@ That's it. `install.sh` will:
 
 ## Version freeze
 
-firstmate is pinned by commit SHA in `.firstmate-ref`. Bumps are deliberate: update the SHA, run CI (which tests the pinned SHA plus latest upstream), merge, done. The freeze is enforced by a test, not by memory.
+**Two independent pins:**
+
+- **Skill repo** (this repo): `gitricko/hermes-firstmate-bridge` — pinned by `.firstmate-ref`
+- **Backend it wraps** (firstmate): `kunchenguid/firstmate` — pinned by `.firstmate-backend-ref`
+
+Both are deliberate bumps: update the SHA, run CI (which tests the pinned versions), merge, done. The freeze is enforced by tests, not by memory.
 
 ## CI
 
@@ -60,7 +66,7 @@ git push no-mistakes <branch>   # this is what actually triggers the gate review
 ## Design
 
 - Crewmate harness: **pi** (Pi-Agent) — pinned in `config/crew-harness`
-- firstmate source: **upstream `kunchenguid/firstmate`** cloned to `~/Documents/firstmate`, pinned via `.firstmate-ref`
+- firstmate backend: **upstream `kunchenguid/firstmate`** cloned to `~/Documents/firstmate`, pinned via `.firstmate-backend-ref` (skill repo: `gitricko/hermes-firstmate-bridge`, pinned via `.firstmate-ref`)
 - The skill **offers, never auto-dispatches** — on a herdr terminal it suggests firstmate; it only spawns on explicit captain intent
 - Merge stays gated on the captain's word (`fm-pr-merge.sh`); crew PRs are review surfaces
 
