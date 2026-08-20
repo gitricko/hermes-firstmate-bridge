@@ -52,7 +52,7 @@ jobs:
         run: |
           FM_HOME="$HOME/Documents/firstmate"
           git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
-          git -C "$FM_HOME" checkout --detach "$(cat .firstmate-ref)"
+          git -C "$FM_HOME" checkout --detach "$(cat .firstmate-backend-ref)"
       - name: Run prereqs --fix
         run: |
           FM_HOME="$HOME/Documents/firstmate" bash firstmate_prereqs.sh --fix
@@ -149,7 +149,7 @@ jobs:
             export PATH=/config/.local/bin:$PATH
             export BRIDGE_SCRIPT=/workspace/firstmate_bridge.py
             git clone --quiet https://github.com/kunchenguid/firstmate.git "$FM_HOME"
-            git -C "$FM_HOME" checkout --detach "$(cat /workspace/.firstmate-ref)"
+            git -C "$FM_HOME" checkout --detach "$(cat /workspace/.firstmate-backend-ref)"
             bash /workspace/firstmate_prereqs.sh --fix
             # Verification evidence: image-shipped herdr + pi and just-installed
             # treehouse on PATH, same prereq gate the prereqs job uses.
