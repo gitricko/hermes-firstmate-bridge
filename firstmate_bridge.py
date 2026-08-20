@@ -362,7 +362,6 @@ def watch(
     *,
     home: str | Path | None = None,
     timeout: int = 600,
-    poll: int = 10,
 ) -> dict:
     """Watch a crewmate task via bin/fm-watch.sh, returning parsed state.
 
@@ -376,7 +375,6 @@ def watch(
       task_id: firstmate task id to watch
       home: FM_HOME override (default: resolved primary home)
       timeout: max seconds to wait before returning exit code 2
-      poll: interval between state checks (passed to fm-watch.sh)
 
     Returns: parsed JSON with at least {"exit_code": int, "stdout": str}.
     """
@@ -384,8 +382,7 @@ def watch(
     cmd = [
         str(FM_BIN / "fm-watch.sh"),
         task_id,
-        "--timeout", str(timeout),
-        "--poll", str(poll),
+        str(timeout),
     ]
     return _run(cmd, home=home_p, timeout=timeout + 30)
 
