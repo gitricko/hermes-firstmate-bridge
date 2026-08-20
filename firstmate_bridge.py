@@ -364,9 +364,13 @@ def watch(
     timeout: int = 600,
     poll: int = 10,
 ) -> dict:
-    """Watch a crewmate task via bin/fm-watch.sh, returning parsed state.
+    """Watch a crewmate task via bin/fm-watch-checkpoint.sh, returning parsed state.
 
-    Mirrors fm-watch.sh's exit semantics:
+    Uses the bounded task-scoped watcher (fm-watch-checkpoint.sh) which runs
+    fm-watch.sh for the given timeout and returns the task's terminal,
+    pending-decision, or timeout state.
+
+    Mirrors fm-watch.sh's exit semantics (via checkpoint):
       0 = terminal (done/failed/blocked with PR URL)
       3 = parked / pending_decision (feed the no-mistakes gate)
       2 = timeout (re-arm to continue)
@@ -375,19 +379,44 @@ def watch(
     Args:
       task_id: firstmate task id to watch
       home: FM_HOME override (default: resolved primary home)
-      timeout: max seconds to wait before returning exit code 2
-      poll: interval between state checks (passed to fm-watch.sh)
+      timeout: max seconds to wait before returning exit code 2 (passed via FM_STALE_ESCALATE_SECS to fm-watch.sh)
+      poll: interval between state checks in seconds (passed via FM_POLL to fm-watch.sh)
 
-    Returns: parsed JSON with at least {"exit_code": int, "stdout": str}.
+    Returns: dict with at least {"exit_code": int, "stdout": str}.
     """
     home_p = resolve_home(home if home is None else str(home))
     cmd = [
-        str(FM_BIN / "fm-watch.sh"),
+        str(FM_BIN / "fm-watch-checkpoint.sh"),
+        "--seconds", str(timeout),
         task_id,
-        "--timeout", str(timeout),
-        "--poll", str(poll),
     ]
-    return _run(cmd, home=home_p, timeout=timeout + 30)
+    # fm-watch.sh (invoked by checkpoint) uses exit codes 2 (timeout) and 3 (parked)
+    # as documented control-flow signals, NOT errors. It reads config via env vars:
+    # FM_POLL (poll interval), FM_STALE_ESCALATE_SECS (stale timeout).
+    # Run directly without _run()'s non-zero-raise logic so callers can
+    # handle control-flow states properly.
+    env = dict(os.environ)
+    env["FM_HOME"] = str(home_p)
+    env["FM_POLL"] = str(poll)
+    env["FM_STALE_ESCALATE_SECS"] = str(timeout)
+    if str(home_p) != str(FM_ROOT):
+        env["FM_ROOT_OVERRIDE"] = str(FM_ROOT)
+    try:
+        proc = subprocess.run(
+            cmd, cwd=FM_ROOT, env=env,
+            capture_output=True, text=True, timeout=timeout + 30,
+        )
+    except FileNotFoundError as exc:
+        raise FirstmateError(f"firstmate bin not found: {exc}") from exc
+
+    # Return all exit codes — 0, 2, 3 are valid control-flow states
+    out = proc.stdout.strip()
+    if not out:
+        return {"exit_code": proc.returncode, "stdout": "", "rc": proc.returncode}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return {"exit_code": proc.returncode, "stdout": out, "rc": proc.returncode}
 
 
 if __name__ == "__main__":
