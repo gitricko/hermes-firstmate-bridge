@@ -375,8 +375,8 @@ def watch(
     Args:
       task_id: firstmate task id to watch
       home: FM_HOME override (default: resolved primary home)
-      timeout: max seconds to wait before returning exit code 2
-      poll: interval between state checks (passed to fm-watch.sh)
+      timeout: max seconds to wait before returning exit code 2 (passed via FM_STALE_ESCALATE_SECS)
+      poll: interval between state checks in seconds (passed via FM_POLL)
 
     Returns: dict with at least {"exit_code": int, "stdout": str}.
     """
@@ -384,14 +384,16 @@ def watch(
     cmd = [
         str(FM_BIN / "fm-watch.sh"),
         task_id,
-        "--timeout", str(timeout),
-        "--poll", str(poll),
     ]
     # fm-watch.sh uses exit codes 2 (timeout) and 3 (parked) as documented
-    # control-flow signals, NOT errors. Run directly without _run()'s
-    # non-zero-raise logic so callers can handle them properly.
+    # control-flow signals, NOT errors. It reads config via environment variables:
+    # FM_POLL (poll interval), FM_STALE_ESCALATE_SECS (stale timeout).
+    # Run directly without _run()'s non-zero-raise logic so callers can
+    # handle control-flow states properly.
     env = dict(os.environ)
     env["FM_HOME"] = str(home_p)
+    env["FM_POLL"] = str(poll)
+    env["FM_STALE_ESCALATE_SECS"] = str(timeout)
     if str(home_p) != str(FM_ROOT):
         env["FM_ROOT_OVERRIDE"] = str(FM_ROOT)
     try:
