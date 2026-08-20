@@ -364,9 +364,13 @@ def watch(
     timeout: int = 600,
     poll: int = 10,
 ) -> dict:
-    """Watch a crewmate task via bin/fm-watch.sh, returning parsed state.
+    """Watch a crewmate task via bin/fm-watch-checkpoint.sh, returning parsed state.
 
-    Mirrors fm-watch.sh's exit semantics:
+    Uses the bounded task-scoped watcher (fm-watch-checkpoint.sh) which runs
+    fm-watch.sh for the given timeout and returns the task's terminal,
+    pending-decision, or timeout state.
+
+    Mirrors fm-watch.sh's exit semantics (via checkpoint):
       0 = terminal (done/failed/blocked with PR URL)
       3 = parked / pending_decision (feed the no-mistakes gate)
       2 = timeout (re-arm to continue)
@@ -375,18 +379,19 @@ def watch(
     Args:
       task_id: firstmate task id to watch
       home: FM_HOME override (default: resolved primary home)
-      timeout: max seconds to wait before returning exit code 2 (passed via FM_STALE_ESCALATE_SECS)
-      poll: interval between state checks in seconds (passed via FM_POLL)
+      timeout: max seconds to wait before returning exit code 2 (passed via FM_STALE_ESCALATE_SECS to fm-watch.sh)
+      poll: interval between state checks in seconds (passed via FM_POLL to fm-watch.sh)
 
     Returns: dict with at least {"exit_code": int, "stdout": str}.
     """
     home_p = resolve_home(home if home is None else str(home))
     cmd = [
-        str(FM_BIN / "fm-watch.sh"),
+        str(FM_BIN / "fm-watch-checkpoint.sh"),
+        "--seconds", str(timeout),
         task_id,
     ]
-    # fm-watch.sh uses exit codes 2 (timeout) and 3 (parked) as documented
-    # control-flow signals, NOT errors. It reads config via environment variables:
+    # fm-watch.sh (invoked by checkpoint) uses exit codes 2 (timeout) and 3 (parked)
+    # as documented control-flow signals, NOT errors. It reads config via env vars:
     # FM_POLL (poll interval), FM_STALE_ESCALATE_SECS (stale timeout).
     # Run directly without _run()'s non-zero-raise logic so callers can
     # handle control-flow states properly.
