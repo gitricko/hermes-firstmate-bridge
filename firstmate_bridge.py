@@ -106,13 +106,26 @@ def detect_runtime() -> str:
 
     Innermost multiplexer wins: tmux > herdr > cmux. Used to offer firstmate
     dispatch when Hermes is itself running under herdr (hermes-webtop preinstall plan).
+    
+    Priority chain:
+    1. Hard env markers — authoritative when present (real terminal): TMUX, HERDR_ENV=1, CMUX_WORKSPACE_ID
+    2. FIRSTMATE_RUNTIME_HINT — captain's cross-sandbox intent (case-insensitive, whitespace-trimmed)
+    3. unknown (fallback)
     """
+    # 1. Hard env markers — authoritative when present (real terminal)
     if os.environ.get("TMUX"):
         return "tmux"
     if os.environ.get("HERDR_ENV") == "1":
         return "herdr"
     if os.environ.get("CMUX_WORKSPACE_ID"):
         return "cmux"
+
+    # 2. FIRSTMATE_RUNTIME_HINT — captain's cross-sandbox intent
+    hint = os.environ.get("FIRSTMATE_RUNTIME_HINT", "").strip().lower()
+    if hint in ("herdr", "tmux", "cmux", "unknown"):
+        return hint
+
+    # 3. Fallback
     return "unknown"
 
 

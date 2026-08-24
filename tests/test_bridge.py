@@ -97,6 +97,82 @@ class DetectRuntimeTests(unittest.TestCase):
             self.assertEqual(fb.detect_runtime(), "unknown")
 
 
+class DetectRuntimeHintTests(unittest.TestCase):
+    """detect_runtime respects FIRSTMATE_RUNTIME_HINT when hard markers absent."""
+
+    def test_hint_herdr_when_no_markers(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "herdr",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "herdr")
+
+    def test_hint_tmux_when_no_markers(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "tmux",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "tmux")
+
+    def test_hint_cmux_when_no_markers(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "cmux",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "cmux")
+
+    def test_hint_unknown_when_no_markers(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "unknown",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "unknown")
+
+    def test_hint_case_insensitive(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "HERDR",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "herdr")
+
+    def test_invalid_hint_ignored(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "invalid",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "unknown")
+
+    def test_hard_markers_override_hint(self):
+        """Hard markers are authoritative when present (real terminal)."""
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "tmux",
+            "HERDR_ENV": "1",  # Actually in herdr
+            "TMUX": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "herdr")
+
+    def test_hint_overrides_unknown_when_no_markers(self):
+        """Hint is used when markers absent (sandbox case)."""
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "herdr",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            self.assertEqual(fb.detect_runtime(), "herdr")
+
+
+class DispatchHintIntegrationTests(unittest.TestCase):
+    """dispatch() uses hint via detect_runtime() when backend=None."""
+
+    def test_dispatch_defaults_to_hint_when_in_sandbox(self):
+        with mock.patch.dict(os.environ, {
+            "FIRSTMATE_RUNTIME_HINT": "herdr",
+            "TMUX": "", "HERDR_ENV": "", "CMUX_WORKSPACE_ID": ""
+        }, clear=True):
+            rt = fb.detect_runtime()
+            backend = rt if rt in ("herdr", "tmux", "cmux") else None
+            self.assertEqual(backend, "herdr")
+
+
 class DispatchBackendDefaultTests(unittest.TestCase):
     """dispatch() defaults backend to the detected runtime (herdr/tmux/cmux)."""
 

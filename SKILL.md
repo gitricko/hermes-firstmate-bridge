@@ -66,7 +66,7 @@ glue files — crewmates never touch files outside their project worktree, and
 | Call | Firstmate wrapper | Notes |
 |---|---|---|
 | `snapshot()` | `fm-fleet-snapshot.sh --json` | Schema `fm-fleet-snapshot.v1` |
-| `detect_runtime()` | env markers | herdr / tmux / cmux / unknown |
+| `detect_runtime()` | env markers | **Now also reads `FIRSTMATE_RUNTIME_HINT`** |
 | `resolve_home(name)` | FM_HOME resolution | fail closed on ambiguity |
 | `dispatch(req, project, ...)` | `fm-brief.sh` + `fm-spawn.sh` | kind ship/scout; harness pi default |
 | `steer(id, msg)` / `decide(id, key, ans)` | `fm-send.sh` | `--resolve-key` for decisions |
@@ -82,6 +82,35 @@ The module's `dispatch()` defaults to `mode="no-mistakes"` — do NOT override t
 gate). `no-mistakes` runs the full pipeline: implement → /no-mistakes review →
 push → PR → merge authority. See `references/no-mistakes-gate.md` for the full
 workflow, install, config, and pitfalls (this is correct as of v1.48.0).
+
+## Runtime Hint for Sandbox Dispatch
+
+When Hermes runs inside a multiplexer (herdr/tmux/cmux) but calls `dispatch()`
+via `execute_code`, the sandbox environment does not inherit terminal markers
+like `HERDR_ENV=1`. This causes `detect_runtime()` to return `unknown` and the
+crewmate spawns in the wrong backend (or firstmate's default).
+
+**Solution**: The captain sets `FIRSTMATE_RUNTIME_HINT` in the terminal before
+dispatching. The bridge reads this hint inside the sandbox and uses it as a
+fallback when hard markers are absent.
+
+### Usage
+
+```bash
+# In the captain's terminal (where HERDR_ENV=1, TMUX, or CMUX_WORKSPACE_ID is set)
+export FIRSTMATE_RUNTIME_HINT=herdr
+# Or let the skill auto-detect:
+export FIRSTMATE_RUNTIME_HINT=$(python3 -c "from firstmate_bridge import detect_runtime; print(detect_runtime())")
+```
+
+### Priority Chain
+
+`detect_runtime()` now resolves in this order:
+1. **Hard markers** — `TMUX` → `HERDR_ENV=1` → `CMUX_WORKSPACE_ID` (authoritative)
+2. **`FIRSTMATE_RUNTIME_HINT`** — captain's cross-sandbox intent
+3. **`unknown`** — firstmate auto-decides
+
+Explicit `backend=` argument to `dispatch()` always overrides all detection.
 
 ## Procedure
 
@@ -144,6 +173,11 @@ workflow, install, config, and pitfalls (this is correct as of v1.48.0).
   prompts (<200 bytes) work reliably. This appears to be an LLM call timeout/
   stall with omniroute when the brief is large and complex. Workaround: keep
   briefs concise or debug omniroute/pi-agent config.
+- **Sandbox loses terminal environment**: when `dispatch()` runs via
+  `execute_code`, the sandbox doesn't inherit `HERDR_ENV=1` / `$TMUX` /
+  `CMUX_WORKSPACE_ID`. The crewmate falls back to tmux. **Fix**: set
+  `FIRSTMATE_RUNTIME_HINT` in the terminal before dispatch (see "Runtime Hint
+  for Sandbox Dispatch" above). The skill loader should automate this.
 
 ## Verification
 
