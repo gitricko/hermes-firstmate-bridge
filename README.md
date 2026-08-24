@@ -32,7 +32,6 @@ That's it. `install.sh` will:
 | `firstmate_bridge.py` | Glue module: snapshot / detect_runtime / resolve_home / dispatch / steer / decide / interrupt / exit / merge / teardown |
 | `firstmate_prereqs.sh` | Checker + installer (`--fix`): treehouse, tasks-axi, pi, jq, FM_HOME, crew-harness, snapshot probe |
 | `install.sh` | One-shot bootstrap (see Quickstart) |
-| `.firstmate-ref` | Pinned skill commit SHA — the skill version freeze |
 | `.firstmate-backend-ref` | Pinned firstmate backend commit SHA — the backend version freeze |
 
 ## Requirements
@@ -43,12 +42,11 @@ That's it. `install.sh` will:
 
 ## Version freeze
 
-**Two independent pins:**
+**Backend pin:**
 
-- **Skill repo** (this repo): `gitricko/hermes-firstmate-bridge` — pinned by `.firstmate-ref`
 - **Backend it wraps** (firstmate): `kunchenguid/firstmate` — pinned by `.firstmate-backend-ref`
 
-Both are deliberate bumps: update the SHA, run CI (which tests the pinned versions), merge, done. The freeze is enforced by tests, not by memory.
+This is a deliberate bump: update the SHA, run CI (which tests the pinned version), merge, done. The freeze is enforced by tests, not by memory.
 
 ## CI
 
@@ -66,7 +64,7 @@ git push no-mistakes <branch>   # this is what actually triggers the gate review
 ## Design
 
 - Crewmate harness: **pi** (Pi-Agent) — pinned in `config/crew-harness`
-- firstmate backend: **upstream `kunchenguid/firstmate`** cloned to `~/Documents/firstmate`, pinned via `.firstmate-backend-ref` (skill repo: `gitricko/hermes-firstmate-bridge`, pinned via `.firstmate-ref`)
+- firstmate backend: **upstream `kunchenguid/firstmate`** cloned to `~/Documents/firstmate`, pinned via `.firstmate-backend-ref`
 - The skill **offers, never auto-dispatches** — on a herdr terminal it suggests firstmate; it only spawns on explicit captain intent
 - Merge stays gated on the captain's word (`fm-pr-merge.sh`); crew PRs are review surfaces
 

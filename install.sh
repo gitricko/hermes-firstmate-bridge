@@ -7,7 +7,6 @@ set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_REPO_URL="${FM_REPO_URL:-https://github.com/kunchenguid/firstmate.git}"
 FM_HOME="${FM_HOME:-$HOME/Documents/firstmate}"
-REF_FILE="$HERE/.firstmate-ref"
 BACKEND_REF_FILE="$HERE/.firstmate-backend-ref"
 CONFIG_DIR="$HOME/.hermes/config"
 CONFIG_FILE="$CONFIG_DIR/firstmate.json"
@@ -22,7 +21,6 @@ FAILED=0
 echo "== firstmate-bridge install =="
 echo "  FM_HOME   = $FM_HOME"
 echo "  FM source = $FM_REPO_URL"
-echo "  skill pin = $(cat "$REF_FILE" 2>/dev/null || echo MISSING)"
 echo "  backend   = $(cat "$BACKEND_REF_FILE" 2>/dev/null || echo MISSING)"
 echo ""
 
