@@ -97,7 +97,7 @@ if [[ -f "$FM_HOME/config/crew-harness" ]]; then
     ok "crew-harness already pi"
   else
     printf 'pi\n' > "$FM_HOME/config/crew-harness"
-    ok "crew-harness -> pi (was $(cat "$FM_HOME/config/crew-harness" | tr -d '\n'))"
+    ok "crew-harness -> pi (was $(tr -d '\n' < "$FM_HOME/config/crew-harness"))"
   fi
 else
   mkdir -p "$FM_HOME/config"
